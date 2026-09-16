@@ -77,6 +77,13 @@ class TuxdEntity(Entity):
         return self._config.get("icon")
 
     @property
+    def suggested_object_id(self):
+        default_entity_id = self._config.get("default_entity_id")
+        if default_entity_id and "." in default_entity_id:
+            return default_entity_id.split(".", 1)[1]
+        return None
+
+    @property
     def entity_category(self):
         try:
             category = EntityCategory(self._config.get("entity_category"))

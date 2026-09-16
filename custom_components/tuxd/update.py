@@ -28,7 +28,7 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
 
     @property
     def supported_features(self):
-        features = UpdateEntityFeature(0)
+        features = UpdateEntityFeature.PROGRESS
         if self._config.get("command_topic"):
             features |= UpdateEntityFeature.INSTALL
         return features
@@ -71,6 +71,8 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
 
     @property
     def entity_picture(self):
+        if (self._entry.get("object_id") or "").startswith("docker_image_"):
+            return None
         return ENTITY_PICTURE_LOGO_BORDER
 
     async def async_install(self, version, backup: bool, **kwargs) -> None:

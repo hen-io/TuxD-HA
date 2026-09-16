@@ -29,7 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, HUB_IDENTIFIER)},
-        name="TuxD",
+        name="All TuxD devices",
         manufacturer="Henrik Isefjær Olsen",
         model="TuxD Home Assistant Integration",
         entry_type=DeviceEntryType.SERVICE,
