@@ -2,7 +2,7 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
-from .const import DOMAIN, ENTITY_PICTURE_LOGO, HUB_IDENTIFIER, SIGNAL_THRESHOLDS_CHANGED, THRESHOLD_METRICS
+from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_THRESHOLDS_CHANGED, THRESHOLD_METRICS
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "number"
@@ -72,10 +72,6 @@ class TuxdThresholdNumber(NumberEntity):
     @property
     def native_value(self):
         return self.hub.thresholds.get(self._object_id, self._default)
-
-    @property
-    def entity_picture(self):
-        return ENTITY_PICTURE_LOGO
 
     async def async_set_native_value(self, value: float) -> None:
         await self.hub.set_threshold(self._object_id, value)

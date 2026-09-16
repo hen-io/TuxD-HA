@@ -2,7 +2,6 @@ DOMAIN = "tuxd"
 WS_PATH = "/api/tuxd/ws"
 
 IMAGES_URL_PREFIX = "/api/tuxd/images"
-ENTITY_PICTURE_LOGO = f"{IMAGES_URL_PREFIX}/logo.png"
 ENTITY_PICTURE_LOGO_BORDER = f"{IMAGES_URL_PREFIX}/logo-border.png"
 
 HUB_IDENTIFIER = "hub"

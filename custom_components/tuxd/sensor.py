@@ -1,13 +1,11 @@
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
-    ENTITY_PICTURE_LOGO,
     HUB_IDENTIFIER,
     SIGNAL_DEVICE_APPROVED,
     SIGNAL_HUB_STATS_UPDATE,
@@ -101,10 +99,6 @@ class TuxdHubStatSensor(SensorEntity):
     @property
     def device_info(self):
         return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
-
-    @property
-    def entity_picture(self):
-        return ENTITY_PICTURE_LOGO
 
     async def async_added_to_hass(self):
         self.async_on_remove(
@@ -249,7 +243,6 @@ class TuxdLastSeenSensor(SensorEntity):
 
     _attr_should_poll = False
     _attr_has_entity_name = False
-    _attr_name = "Last Seen"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:clock-check-outline"
@@ -258,6 +251,7 @@ class TuxdLastSeenSensor(SensorEntity):
         self.hub = hub
         self._device_id = device_id
         self._attr_unique_id = f"{DOMAIN}_{device_id}_last_seen"
+        self._attr_name = f"{device_id} Last Seen"
 
     @property
     def native_value(self):
@@ -265,16 +259,7 @@ class TuxdLastSeenSensor(SensorEntity):
 
     @property
     def device_info(self):
-        dev_reg = dr.async_get(self.hass)
-        hub_device = dev_reg.async_get_device_by_identifier((DOMAIN, HUB_IDENTIFIER), self.hub.entry.entry_id)
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            via_device_id=hub_device.id if hub_device else None,
-        )
-
-    @property
-    def entity_picture(self):
-        return ENTITY_PICTURE_LOGO
+        return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
 
     async def async_added_to_hass(self):
         self.async_on_remove(

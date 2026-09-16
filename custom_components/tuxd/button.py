@@ -1,7 +1,7 @@
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
-from .const import DOMAIN, ENTITY_PICTURE_LOGO, HUB_IDENTIFIER
+from .const import DOMAIN, HUB_IDENTIFIER
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "button"
@@ -38,10 +38,6 @@ class TuxdHubButton(ButtonEntity):
     @property
     def device_info(self):
         return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
-
-    @property
-    def entity_picture(self):
-        return ENTITY_PICTURE_LOGO
 
 
 class TuxdRestartAllButton(TuxdHubButton):
