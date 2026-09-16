@@ -25,6 +25,8 @@ _MAX_PENDING_DEVICES = 50
 
 class TuxdHub:
 
+    _RECONCILE_SETTLE_SECONDS = 10.0
+
     def __init__(self, hass, entry):
         self.hass = hass
         self.entry = entry
@@ -35,6 +37,7 @@ class TuxdHub:
         self.devices = {}
         self.entities = {}
         self.key_to_unique_ids = {}
+        self._device_generation = {}
 
         self._sync_pending_issue()
 
@@ -193,6 +196,35 @@ class TuxdHub:
             via_device_id=hub_device.id if hub_device else None,
         )
         _LOGGER.info("TuxD device connected: %s", device_id)
+
+        self._device_generation[device_id] = self._device_generation.get(device_id, 0) + 1
+        self.hass.async_create_task(
+            self._reconcile_device_entities(device_id, self._device_generation[device_id])
+        )
+
+        self._notify_stats_changed()
+
+    async def _reconcile_device_entities(self, device_id, generation):
+        await asyncio.sleep(self._RECONCILE_SETTLE_SECONDS)
+        if self._device_generation.get(device_id) != generation:
+            return
+
+        stale = [
+            (uid, e.get("domain")) for uid, e in self.entities.items()
+            if e.get("device_id") == device_id and e.get("_generation") != generation
+        ]
+        if not stale:
+            return
+        for uid, domain in stale:
+            self.entities.pop(uid, None)
+            if domain:
+                async_dispatcher_send(self.hass, SIGNAL_REMOVE_ENTITY.format(domain=domain), uid)
+        for uids in self.key_to_unique_ids.values():
+            uids.difference_update(uid for uid, _domain in stale)
+        _LOGGER.info(
+            "TuxD: device %s no longer announces %d entit%s - removed",
+            device_id, len(stale), "y" if len(stale) == 1 else "ies",
+        )
         self._notify_stats_changed()
 
     def async_set_ws(self, device_id, ws):
@@ -272,6 +304,7 @@ class TuxdHub:
         entry["object_id"] = object_id
         entry["device_id"] = device_id
         entry["config"] = config
+        entry["_generation"] = self._device_generation.get(device_id, 0)
 
         if state_topic:
             self.key_to_unique_ids.setdefault(state_topic, set()).add(unique_id)
