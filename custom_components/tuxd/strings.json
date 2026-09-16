@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up TuxD",
-        "description": "TuxD agents will connect directly to this Home Assistant instance instead of through MQTT. This is a one-time *pairing* key, not a permanent credential - paste it into a new agent's tuxd.conf under home-assistant.api_key (with tuxd.connection_mode set to \"direct\") to introduce it, then open this integration's Configure button to approve it and issue it its own permanent key:\n\n`{api_key}`\n\nThis key is shown only once - if you lose it, use Reconfigure to generate a new one. Devices you've already approved are unaffected by that."
+        "description": "TuxD agents will connect directly to this Home Assistant instance instead of through MQTT. This is a *pairing* key, not a permanent credential - paste it into a new agent's tuxd.conf under home-assistant.api_key (with tuxd.connection_mode set to \"direct\") to introduce it, then open this integration's Configure button to approve it and issue it its own permanent key. It's reusable - the same key introduces every new device you add from now on, and you can see it again any time on the Configure screen:\n\n`{api_key}`\n\nIf you want to invalidate it, use Reconfigure to generate a new one. Devices you've already approved are unaffected by that."
       },
       "reconfigure": {
         "title": "Rotate TuxD pairing key",
@@ -19,7 +19,7 @@
     "step": {
       "init": {
         "title": "Approve TuxD devices",
-        "description": "These devices presented the pairing key and are waiting for you to confirm they're legitimate before they get their own permanent key and can report data or receive commands. Reject anything you don't recognize.",
+        "description": "These devices presented the pairing key and are waiting for you to confirm they're legitimate before they get their own permanent key and can report data or receive commands. Reject anything you don't recognize.\n\nPairing key, for introducing further new devices:\n\n`{pairing_key}`",
         "data": {
           "approve": "Approve",
           "reject": "Reject"
@@ -27,7 +27,7 @@
       },
       "no_pending": {
         "title": "Approve TuxD devices",
-        "description": "No devices are currently waiting for approval."
+        "description": "No devices are currently waiting for approval.\n\nPairing key, for introducing a new device:\n\n`{pairing_key}`"
       },
       "issued": {
         "title": "New device keys",

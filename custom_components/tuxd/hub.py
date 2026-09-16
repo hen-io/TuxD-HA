@@ -6,7 +6,7 @@ import secrets
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DOMAIN, HUB_IDENTIFIER, PLATFORMS, SIGNAL_NEW_ENTITY, SIGNAL_STATE_UPDATE
+from .const import DOMAIN, HUB_IDENTIFIER, PLATFORMS, SIGNAL_HUB_STATS_UPDATE, SIGNAL_NEW_ENTITY, SIGNAL_STATE_UPDATE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ class TuxdHub:
         self.pending_devices.pop(device_id, None)
         self._persist()
         _LOGGER.info("TuxD: device %s approved and issued its own key", device_id)
+        self._notify_stats_changed()
         return new_key
 
     def reject_device(self, device_id):
@@ -62,6 +63,10 @@ class TuxdHub:
         if device_id in self.device_keys:
             self.device_keys.pop(device_id, None)
             self._persist()
+            self._notify_stats_changed()
+
+    def _notify_stats_changed(self):
+        async_dispatcher_send(self.hass, SIGNAL_HUB_STATS_UPDATE)
 
     def _persist(self):
         data = {
@@ -91,6 +96,7 @@ class TuxdHub:
             via_device_id=hub_device.id if hub_device else None,
         )
         _LOGGER.info("TuxD device connected: %s", device_id)
+        self._notify_stats_changed()
 
     def async_set_ws(self, device_id, ws):
         self.devices.setdefault(device_id, {})["ws"] = ws
@@ -101,6 +107,7 @@ class TuxdHub:
         for uid, entry in self.entities.items():
             if entry.get("device_id") == device_id:
                 async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
+        self._notify_stats_changed()
 
 
     async def async_handle_message(self, device_id, raw):
@@ -178,6 +185,8 @@ class TuxdHub:
             async_dispatcher_send(self.hass, SIGNAL_NEW_ENTITY.format(domain=domain), unique_id)
         else:
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=unique_id))
+        if object_id in ("system_error", "host_update", "self_update"):
+            self._notify_stats_changed()
 
     def _handle_discovery_clear(self, device_id, msg):
         domain = msg.get("domain")
@@ -190,6 +199,8 @@ class TuxdHub:
         for uid in stale:
             self.entities.pop(uid, None)
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
+        if object_id in ("system_error", "host_update", "self_update"):
+            self._notify_stats_changed()
 
     def _handle_state(self, device_id, msg):
         key = msg.get("key")
@@ -213,6 +224,8 @@ class TuxdHub:
             else:
                 entry["state"] = value
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
+            if entry.get("object_id") in ("system_error", "host_update", "self_update"):
+                self._notify_stats_changed()
 
 
     def send_command(self, device_id, key, payload):

@@ -78,12 +78,19 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("approve", default=[]): cv.multi_select(choices),
             vol.Optional("reject", default=[]): cv.multi_select(choices),
         })
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(
+            step_id="init", data_schema=schema,
+            description_placeholders={"pairing_key": hub.pairing_key},
+        )
 
     async def async_step_no_pending(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data={})
-        return self.async_show_form(step_id="no_pending", data_schema=vol.Schema({}))
+        hub = self.hass.data[DOMAIN][self.config_entry.entry_id]
+        return self.async_show_form(
+            step_id="no_pending", data_schema=vol.Schema({}),
+            description_placeholders={"pairing_key": hub.pairing_key},
+        )
 
     async def async_step_issued(self, user_input=None, issued=None):
         if issued is not None:
