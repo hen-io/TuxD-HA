@@ -478,3 +478,11 @@ class TuxdHub:
             return
         ws = info["ws"]
         asyncio.create_task(ws.send_str(json.dumps({"type": "command", "key": key, "payload": payload})))
+
+    def restart_all_devices(self):
+        for device_id in list(self.devices.keys()):
+            self.send_command(device_id, f"tuxd/{device_id}/restart/set", "PRESS")
+
+    def refresh_all_devices(self):
+        for device_id in list(self.devices.keys()):
+            self.send_command(device_id, f"tuxd/{device_id}/force_poll/set", "PRESS")
