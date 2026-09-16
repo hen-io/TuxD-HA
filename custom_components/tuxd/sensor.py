@@ -33,6 +33,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdDevicesWithHostUpdatesSensor(hub),
         TuxdDevicesWithScriptUpdatesSensor(hub),
         TuxdDevicesWithSmartErrorsSensor(hub),
+        TuxdDevicesByVersionSensor(hub),
         *[TuxdVmsOverThresholdSensor(hub, *row) for row in THRESHOLD_METRICS],
     ])
 
@@ -136,6 +137,29 @@ class TuxdOfflineDevicesSensor(TuxdHubStatSensor):
     @property
     def native_value(self):
         return max(0, len(self.hub.device_keys) - len(self.hub.devices))
+
+
+class TuxdDevicesByVersionSensor(TuxdHubStatSensor):
+
+    _attr_native_unit_of_measurement = "versions"
+
+    def __init__(self, hub):
+        super().__init__(hub, "devices_by_version", "TuxD Devices By Version", "mdi:tag-multiple-outline")
+
+    def _counts(self):
+        counts = {}
+        for info in self.hub.devices.values():
+            version = info.get("sw_version") or "unknown"
+            counts[version] = counts.get(version, 0) + 1
+        return counts
+
+    @property
+    def native_value(self):
+        return len(self._counts())
+
+    @property
+    def extra_state_attributes(self):
+        return {"versions": self._counts()}
 
 
 class TuxdDevicesWithErrorsSensor(TuxdHubStatSensor):
