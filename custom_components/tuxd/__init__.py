@@ -8,11 +8,13 @@ from homeassistant.helpers.device_registry import DeviceEntryType
 
 from .const import DOMAIN, HUB_IDENTIFIER, ISSUE_PENDING_DEVICES, PLATFORMS
 from .hub import TuxdHub
+from .live_tty import async_setup_live_tty
 from .websocket_view import TuxdWebSocketView
 
 _LOGGER = logging.getLogger(__name__)
 
 _VIEW_KEY = f"{DOMAIN}_ws_view"
+_LIVE_TTY_KEY = f"{DOMAIN}_live_tty"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -37,6 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[_VIEW_KEY] = view
     else:
         view.hub = hub
+
+    if not hass.data.get(_LIVE_TTY_KEY):
+        async_setup_live_tty(hass)
+        hass.data[_LIVE_TTY_KEY] = True
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

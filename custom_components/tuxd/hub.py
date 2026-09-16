@@ -2,7 +2,9 @@ import asyncio
 import json
 import logging
 import secrets
+import uuid
 
+from homeassistant.components import websocket_api
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
@@ -41,6 +43,7 @@ class TuxdHub:
         self.entities = {}
         self.key_to_unique_ids = {}
         self._device_generation = {}
+        self._tty_sessions = {}
 
     async def async_load(self):
         stored = await self._store.async_load()
@@ -252,7 +255,7 @@ class TuxdHub:
         removed = len(stale)
 
         dev_reg = dr.async_get(self.hass)
-        device_entry = dev_reg.async_get_device(identifiers={(DOMAIN, device_id)})
+        device_entry = dev_reg.async_get_device_by_identifier((DOMAIN, device_id), self.entry.entry_id)
         if device_entry is not None:
             ent_reg = er.async_get(self.hass)
             confirmed = {
@@ -282,6 +285,65 @@ class TuxdHub:
                 async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
         self._notify_stats_changed()
 
+        for session_id, info in list(self._tty_sessions.items()):
+            if info["device_id"] == device_id:
+                self._tty_sessions.pop(session_id, None)
+                info["connection"].send_message(
+                    websocket_api.event_message(info["msg_id"], {"type": "tty_exit", "code": -1})
+                )
+
+
+    def tty_open(self, device_id, connection, msg_id, cols, rows):
+        info = self.devices.get(device_id)
+        if not info or "ws" not in info:
+            return None
+        session_id = uuid.uuid4().hex[:12]
+        self._tty_sessions[session_id] = {
+            "device_id": device_id, "connection": connection, "msg_id": msg_id,
+        }
+        ws = info["ws"]
+        asyncio.create_task(ws.send_str(json.dumps({
+            "type": "tty_open", "session": session_id, "cols": cols, "rows": rows,
+        })))
+        return session_id
+
+    def tty_input(self, session_id, data):
+        self._tty_send(session_id, {"type": "tty_input", "session": session_id, "data": data})
+
+    def tty_resize(self, session_id, cols, rows):
+        self._tty_send(session_id, {"type": "tty_resize", "session": session_id, "cols": cols, "rows": rows})
+
+    def tty_close(self, session_id):
+        self._tty_send(session_id, {"type": "tty_close", "session": session_id})
+        self._tty_sessions.pop(session_id, None)
+
+    def _tty_send(self, session_id, obj):
+        info = self._tty_sessions.get(session_id)
+        if not info:
+            return
+        dev = self.devices.get(info["device_id"])
+        if not dev or "ws" not in dev:
+            return
+        asyncio.create_task(dev["ws"].send_str(json.dumps(obj)))
+
+    def _handle_tty_data(self, device_id, msg):
+        session_id = msg.get("session")
+        info = self._tty_sessions.get(session_id)
+        if not info or info["device_id"] != device_id:
+            return
+        info["connection"].send_message(
+            websocket_api.event_message(info["msg_id"], {"type": "tty_data", "data": msg.get("data", "")})
+        )
+
+    def _handle_tty_exit(self, device_id, msg):
+        session_id = msg.get("session")
+        info = self._tty_sessions.pop(session_id, None)
+        if not info or info["device_id"] != device_id:
+            return
+        info["connection"].send_message(
+            websocket_api.event_message(info["msg_id"], {"type": "tty_exit", "code": msg.get("code", -1)})
+        )
+
 
     async def async_handle_message(self, device_id, raw):
         try:
@@ -296,6 +358,10 @@ class TuxdHub:
             self._handle_discovery_clear(device_id, msg)
         elif mtype == "state":
             self._handle_state(device_id, msg)
+        elif mtype == "tty_data":
+            self._handle_tty_data(device_id, msg)
+        elif mtype == "tty_exit":
+            self._handle_tty_exit(device_id, msg)
         elif mtype == "ping":
             ws = self.devices.get(device_id, {}).get("ws")
             if ws is not None:

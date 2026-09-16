@@ -1,4 +1,5 @@
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import Entity, DeviceInfo, EntityCategory
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -89,13 +90,15 @@ class TuxdEntity(Entity):
     def device_info(self):
         dev = self._config.get("device") or {}
         identifiers = dev.get("identifiers") or [self._entry.get("device_id")]
+        dev_reg = dr.async_get(self.hass)
+        hub_device = dev_reg.async_get_device_by_identifier((DOMAIN, HUB_IDENTIFIER), self.hub.entry.entry_id)
         return DeviceInfo(
             identifiers={(DOMAIN, i) for i in identifiers if i},
             name=dev.get("name"),
             manufacturer=dev.get("manufacturer"),
             model=dev.get("model"),
             sw_version=dev.get("sw_version"),
-            via_device=(DOMAIN, HUB_IDENTIFIER),
+            via_device_id=hub_device.id if hub_device else None,
         )
 
     @property

@@ -1,6 +1,7 @@
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_HUB_STATS_UPDATE
 from .entity import TuxdEntity, async_setup_dynamic_platform
@@ -25,7 +26,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class TuxdSensor(TuxdEntity, SensorEntity):
     @property
     def native_value(self):
-        return self._entry.get("state")
+        value = self._entry.get("state")
+        if isinstance(value, str):
+            device_class = self._config.get("device_class")
+            if device_class == "timestamp":
+                return dt_util.parse_datetime(value)
+            if device_class == "date":
+                return dt_util.parse_date(value)
+        return value
 
     @property
     def native_unit_of_measurement(self):
