@@ -1,7 +1,7 @@
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
-from .const import DOMAIN, HUB_IDENTIFIER
+from .const import DOMAIN, ENTITY_PICTURE_LOGO, HUB_IDENTIFIER
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "button"
@@ -15,6 +15,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdRestartAllButton(hub),
         TuxdRefreshAllButton(hub),
         TuxdUpdateAllButton(hub),
+        TuxdCheckHostUpdatesAllButton(hub),
     ])
 
 
@@ -37,6 +38,10 @@ class TuxdHubButton(ButtonEntity):
     @property
     def device_info(self):
         return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+    @property
+    def entity_picture(self):
+        return ENTITY_PICTURE_LOGO
 
 
 class TuxdRestartAllButton(TuxdHubButton):
@@ -61,3 +66,11 @@ class TuxdUpdateAllButton(TuxdHubButton):
 
     async def async_press(self) -> None:
         self.hub.update_all_devices()
+
+
+class TuxdCheckHostUpdatesAllButton(TuxdHubButton):
+    def __init__(self, hub):
+        super().__init__(hub, "check_host_updates_all", "Check Host Updates On All Devices", "mdi:server-security")
+
+    async def async_press(self) -> None:
+        self.hub.check_host_updates_all_devices()

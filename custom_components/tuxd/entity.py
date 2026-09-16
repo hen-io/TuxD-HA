@@ -4,7 +4,14 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import Entity, DeviceInfo, EntityCategory
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_NEW_ENTITY, SIGNAL_REMOVE_ENTITY, SIGNAL_STATE_UPDATE
+from .const import (
+    DOMAIN,
+    ENTITY_PICTURE_LOGO,
+    HUB_IDENTIFIER,
+    SIGNAL_NEW_ENTITY,
+    SIGNAL_REMOVE_ENTITY,
+    SIGNAL_STATE_UPDATE,
+)
 
 
 def async_setup_dynamic_platform(hass, entry, async_add_entities, domain_key, entity_cls, hub):
@@ -75,6 +82,10 @@ class TuxdEntity(Entity):
     @property
     def icon(self):
         return self._config.get("icon")
+
+    @property
+    def entity_picture(self):
+        return ENTITY_PICTURE_LOGO
 
     @property
     def entity_category(self):

@@ -2,7 +2,7 @@ import json
 
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 
-from .const import DOMAIN
+from .const import DOMAIN, ENTITY_PICTURE_LOGO_BORDER
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "update"
@@ -68,6 +68,10 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
     @property
     def device_class(self):
         return self._config.get("device_class")
+
+    @property
+    def entity_picture(self):
+        return ENTITY_PICTURE_LOGO_BORDER
 
     async def async_install(self, version, backup: bool, **kwargs) -> None:
         command_topic = self._config.get("command_topic")

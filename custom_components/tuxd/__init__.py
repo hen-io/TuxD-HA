@@ -1,12 +1,14 @@
 import logging
+from pathlib import Path
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType
 
-from .const import DOMAIN, HUB_IDENTIFIER, ISSUE_PENDING_DEVICES, PLATFORMS
+from .const import DOMAIN, HUB_IDENTIFIER, IMAGES_URL_PREFIX, ISSUE_PENDING_DEVICES, PLATFORMS
 from .hub import TuxdHub
 from .live_tty import async_setup_live_tty
 from .websocket_view import TuxdWebSocketView
@@ -15,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _VIEW_KEY = f"{DOMAIN}_ws_view"
 _LIVE_TTY_KEY = f"{DOMAIN}_live_tty"
+_IMAGES_KEY = f"{DOMAIN}_images"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -43,6 +46,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.data.get(_LIVE_TTY_KEY):
         async_setup_live_tty(hass)
         hass.data[_LIVE_TTY_KEY] = True
+
+    if not hass.data.get(_IMAGES_KEY):
+        images_dir = Path(__file__).parent / "images"
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(IMAGES_URL_PREFIX, str(images_dir), True)
+        ])
+        hass.data[_IMAGES_KEY] = True
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

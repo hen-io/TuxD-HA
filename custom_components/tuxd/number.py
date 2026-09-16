@@ -1,6 +1,8 @@
 from homeassistant.components.number import NumberEntity
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
-from .const import DOMAIN
+from .const import DOMAIN, ENTITY_PICTURE_LOGO, HUB_IDENTIFIER, SIGNAL_THRESHOLDS_CHANGED, THRESHOLD_METRICS
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "number"
@@ -9,6 +11,10 @@ _DOMAIN_KEY = "number"
 async def async_setup_entry(hass, entry, async_add_entities):
     hub = hass.data[DOMAIN][entry.entry_id]
     async_setup_dynamic_platform(hass, entry, async_add_entities, _DOMAIN_KEY, TuxdNumber, hub)
+
+    async_add_entities([
+        TuxdThresholdNumber(hub, *row) for row in THRESHOLD_METRICS
+    ])
 
 
 class TuxdNumber(TuxdEntity, NumberEntity):
@@ -38,3 +44,43 @@ class TuxdNumber(TuxdEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         self._send_command(self._config.get("command_topic"), str(value))
+
+
+class TuxdThresholdNumber(NumberEntity):
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 0
+
+    def __init__(self, hub, object_id, name, icon, unit, min_value, max_value, step, default):
+        self.hub = hub
+        self._object_id = object_id
+        self._default = default
+        self._attr_unique_id = f"{DOMAIN}_hub_threshold_{object_id}"
+        self._attr_name = f"{name} Threshold"
+        self._attr_icon = icon
+        self._attr_native_unit_of_measurement = unit
+        self._attr_native_min_value = min_value
+        self._attr_native_max_value = max_value
+        self._attr_native_step = step
+
+    @property
+    def device_info(self):
+        return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+    @property
+    def native_value(self):
+        return self.hub.thresholds.get(self._object_id, self._default)
+
+    @property
+    def entity_picture(self):
+        return ENTITY_PICTURE_LOGO
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.hub.set_threshold(self._object_id, value)
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_THRESHOLDS_CHANGED, self.async_write_ha_state)
+        )

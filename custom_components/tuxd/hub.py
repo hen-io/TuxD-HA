@@ -24,7 +24,11 @@ from .const import (
     SIGNAL_OFFLINE_UPDATE_URL_CHANGED,
     SIGNAL_REMOVE_ENTITY,
     SIGNAL_STATE_UPDATE,
+    SIGNAL_THRESHOLDS_CHANGED,
+    THRESHOLD_METRICS,
 )
+
+_THRESHOLD_OBJECT_IDS = frozenset(row[0] for row in THRESHOLD_METRICS)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,8 +37,10 @@ _MAX_PENDING_DEVICES = 50
 
 def _is_stats_relevant_object_id(object_id):
     object_id = object_id or ""
-    return object_id in ("system_error", "host_update", "self_update") or (
-        object_id.startswith("disk_") and object_id.endswith("_smart_errors")
+    return (
+        object_id in ("system_error", "host_update", "self_update")
+        or object_id in _THRESHOLD_OBJECT_IDS
+        or (object_id.startswith("disk_") and object_id.endswith("_smart_errors"))
     )
 
 
@@ -49,6 +55,7 @@ class TuxdHub:
         self.pairing_key = ""
         self.device_keys = {}
         self.pending_devices = {}
+        self.thresholds = {}
 
         self.devices = {}
         self.device_last_seen = {}
@@ -64,6 +71,7 @@ class TuxdHub:
             self.pairing_key = stored.get("pairing_key", "")
             self.device_keys = dict(stored.get("device_keys", {}))
             self.pending_devices = dict(stored.get("pending_devices", {}))
+            self.thresholds = dict(stored.get("thresholds", {}))
         else:
             self.pairing_key = self.entry.data.get("pairing_key", "")
             self.device_keys = dict(self.entry.data.get("device_keys", {}))
@@ -221,12 +229,14 @@ class TuxdHub:
             self.pairing_key = stored.get("pairing_key", self.pairing_key)
             self.device_keys = dict(stored.get("device_keys", self.device_keys))
             self.pending_devices = dict(stored.get("pending_devices", self.pending_devices))
+            self.thresholds = dict(stored.get("thresholds", self.thresholds))
 
     async def _persist(self):
         data = {
             "pairing_key": self.pairing_key,
             "device_keys": self.device_keys,
             "pending_devices": self.pending_devices,
+            "thresholds": self.thresholds,
         }
         await self._store.async_save(data)
 
@@ -527,3 +537,11 @@ class TuxdHub:
             )
         else:
             self.hass.async_create_task(self._send_staggered("self_update"))
+
+    def check_host_updates_all_devices(self):
+        self.hass.async_create_task(self._send_staggered("host_update/check"))
+
+    async def set_threshold(self, key, value):
+        self.thresholds[key] = value
+        await self._persist()
+        async_dispatcher_send(self.hass, SIGNAL_THRESHOLDS_CHANGED)

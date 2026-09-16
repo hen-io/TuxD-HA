@@ -5,7 +5,16 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_DEVICE_APPROVED, SIGNAL_HUB_STATS_UPDATE, SIGNAL_LAST_SEEN_UPDATE
+from .const import (
+    DOMAIN,
+    ENTITY_PICTURE_LOGO,
+    HUB_IDENTIFIER,
+    SIGNAL_DEVICE_APPROVED,
+    SIGNAL_HUB_STATS_UPDATE,
+    SIGNAL_LAST_SEEN_UPDATE,
+    SIGNAL_THRESHOLDS_CHANGED,
+    THRESHOLD_METRICS,
+)
 from .entity import TuxdEntity, async_setup_dynamic_platform
 from .update import TuxdUpdate
 
@@ -24,6 +33,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdDevicesWithHostUpdatesSensor(hub),
         TuxdDevicesWithScriptUpdatesSensor(hub),
         TuxdDevicesWithSmartErrorsSensor(hub),
+        *[TuxdVmsOverThresholdSensor(hub, *row) for row in THRESHOLD_METRICS],
     ])
 
     added = set()
@@ -90,6 +100,10 @@ class TuxdHubStatSensor(SensorEntity):
     @property
     def device_info(self):
         return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+    @property
+    def entity_picture(self):
+        return ENTITY_PICTURE_LOGO
 
     async def async_added_to_hass(self):
         self.async_on_remove(
@@ -162,7 +176,7 @@ class TuxdDevicesWithScriptUpdatesSensor(TuxdHubStatSensor):
 
 class TuxdDevicesWithSmartErrorsSensor(TuxdHubStatSensor):
     def __init__(self, hub):
-        super().__init__(hub, "devices_with_smart_errors", "TuxD Devices With SMART Errors", "mdi:harddisk-alert")
+        super().__init__(hub, "devices_with_smart_errors", "TuxD Devices With SMART Errors", "mdi:harddisk")
 
     @property
     def native_value(self):
@@ -177,6 +191,34 @@ class TuxdDevicesWithSmartErrorsSensor(TuxdHubStatSensor):
             except (TypeError, ValueError):
                 continue
         return len(devices)
+
+
+class TuxdVmsOverThresholdSensor(TuxdHubStatSensor):
+
+    def __init__(self, hub, object_id, name, icon, unit, min_value, max_value, step, default):
+        super().__init__(hub, f"vms_over_{object_id}", f"TuxD VMs Over {name} Threshold", icon)
+        self._object_id = object_id
+        self._default = default
+
+    @property
+    def native_value(self):
+        threshold = self.hub.thresholds.get(self._object_id, self._default)
+        count = 0
+        for e in self.hub.entities.values():
+            if e.get("object_id") != self._object_id:
+                continue
+            try:
+                if float(e.get("state")) > threshold:
+                    count += 1
+            except (TypeError, ValueError):
+                continue
+        return count
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_THRESHOLDS_CHANGED, self.async_write_ha_state)
+        )
 
 
 class TuxdLastSeenSensor(SensorEntity):
@@ -205,6 +247,10 @@ class TuxdLastSeenSensor(SensorEntity):
             identifiers={(DOMAIN, self._device_id)},
             via_device_id=hub_device.id if hub_device else None,
         )
+
+    @property
+    def entity_picture(self):
+        return ENTITY_PICTURE_LOGO
 
     async def async_added_to_hass(self):
         self.async_on_remove(

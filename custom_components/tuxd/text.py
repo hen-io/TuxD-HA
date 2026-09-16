@@ -2,7 +2,7 @@ from homeassistant.components.text import TextEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
-from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_OFFLINE_UPDATE_URL_CHANGED
+from .const import DOMAIN, ENTITY_PICTURE_LOGO, HUB_IDENTIFIER, SIGNAL_OFFLINE_UPDATE_URL_CHANGED
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "text"
@@ -45,6 +45,10 @@ class TuxdOfflineUpdateUrlText(TextEntity):
     @property
     def native_value(self):
         return self.hub.offline_update_url
+
+    @property
+    def entity_picture(self):
+        return ENTITY_PICTURE_LOGO
 
     async def async_set_value(self, value: str) -> None:
         self.hub.set_offline_update_url(value)
