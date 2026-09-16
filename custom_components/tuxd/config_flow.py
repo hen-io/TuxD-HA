@@ -16,13 +16,13 @@ class TuxdConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="single_instance_allowed")
 
         if user_input is not None:
-            return self.async_create_entry(title="TuxD", data={"api_key": self._pairing_key})
+            return self.async_create_entry(title="TuxD", data={"pairing_key": self._pairing_key})
 
         self._pairing_key = secrets.token_hex(32)
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({}),
-            description_placeholders={"api_key": self._pairing_key},
+            description_placeholders={"pairing_key": self._pairing_key},
         )
 
     async def async_step_reconfigure(self, user_input=None):
@@ -30,7 +30,7 @@ class TuxdConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             new_data = dict(entry.data)
-            new_data["api_key"] = self._pairing_key
+            new_data["pairing_key"] = self._pairing_key
             self.hass.config_entries.async_update_entry(entry, data=new_data)
             return self.async_abort(reason="reconfigure_successful")
 
@@ -38,7 +38,7 @@ class TuxdConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=vol.Schema({}),
-            description_placeholders={"api_key": self._pairing_key},
+            description_placeholders={"pairing_key": self._pairing_key},
         )
 
     @staticmethod

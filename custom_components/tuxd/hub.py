@@ -16,7 +16,7 @@ class TuxdHub:
     def __init__(self, hass, entry):
         self.hass = hass
         self.entry = entry
-        self.pairing_key = entry.data.get("api_key", "")
+        self.pairing_key = entry.data.get("pairing_key", "")
         self.device_keys = dict(entry.data.get("device_keys", {}))
         self.pending_devices = dict(entry.data.get("pending_devices", {}))
 
@@ -70,7 +70,7 @@ class TuxdHub:
 
     def _persist(self):
         data = {
-            "api_key": self.pairing_key,
+            "pairing_key": self.pairing_key,
             "device_keys": self.device_keys,
             "pending_devices": self.pending_devices,
         }

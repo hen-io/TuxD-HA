@@ -3,11 +3,11 @@
     "step": {
       "user": {
         "title": "Set up TuxD",
-        "description": "TuxD agents will connect directly to this Home Assistant instance instead of through MQTT. This is a *pairing* key, not a permanent credential - paste it into a new agent's tuxd.conf under home-assistant.api_key (with tuxd.connection_mode set to \"direct\") to introduce it, then open this integration's Configure button to approve it and issue it its own permanent key. It's reusable - the same key introduces every new device you add from now on, and you can see it again any time on the Configure screen:\n\n`{api_key}`\n\nIf you want to invalidate it, use Reconfigure to generate a new one. Devices you've already approved are unaffected by that."
+        "description": "TuxD agents will connect directly to this Home Assistant instance instead of through MQTT. This is a *pairing* key, not a permanent credential - paste it into a new agent's tuxd.conf under home-assistant.pairing_key (with tuxd.connection_mode set to \"direct\") to introduce it, then open this integration's Configure button to approve it and issue it its own permanent key. It's reusable - the same key introduces every new device you add from now on, and you can see it again any time on the Configure screen:\n\n`{pairing_key}`\n\nIf you want to invalidate it, use Reconfigure to generate a new one. Devices you've already approved are unaffected by that."
       },
       "reconfigure": {
         "title": "Rotate TuxD pairing key",
-        "description": "This replaces the pairing key used to introduce brand-new devices. Already-approved devices keep their own dedicated keys and are not affected - this only stops anyone still holding the old pairing key from introducing a new device:\n\n`{api_key}`"
+        "description": "This replaces the pairing key used to introduce brand-new devices. Already-approved devices keep their own dedicated keys and are not affected - this only stops anyone still holding the old pairing key from introducing a new device:\n\n`{pairing_key}`"
       }
     },
     "abort": {
