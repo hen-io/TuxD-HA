@@ -1,9 +1,11 @@
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_HUB_STATS_UPDATE
+from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_DEVICE_APPROVED, SIGNAL_HUB_STATS_UPDATE, SIGNAL_LAST_SEEN_UPDATE
 from .entity import TuxdEntity, async_setup_dynamic_platform
 from .update import TuxdUpdate
 
@@ -21,6 +23,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdDevicesWithHostUpdatesSensor(hub),
         TuxdDevicesWithScriptUpdatesSensor(hub),
     ])
+
+    added = set()
+
+    @callback
+    def _add_last_seen(device_id):
+        if device_id in added:
+            return
+        added.add(device_id)
+        async_add_entities([TuxdLastSeenSensor(hub, device_id)])
+
+    for device_id in list(hub.device_keys.keys()):
+        _add_last_seen(device_id)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_DEVICE_APPROVED, _add_last_seen)
+    )
 
 
 class TuxdSensor(TuxdEntity, SensorEntity):
@@ -128,4 +146,41 @@ class TuxdDevicesWithScriptUpdatesSensor(TuxdHubStatSensor):
         return sum(
             1 for uid, e in self.hub.entities.items()
             if e.get("object_id") == "self_update" and _has_update(self.hub, uid)
+        )
+
+
+class TuxdLastSeenSensor(SensorEntity):
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "Last Seen"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:clock-check-outline"
+
+    def __init__(self, hub, device_id):
+        self.hub = hub
+        self._device_id = device_id
+        self._attr_unique_id = f"{DOMAIN}_{device_id}_last_seen"
+
+    @property
+    def native_value(self):
+        return self.hub.device_last_seen.get(self._device_id)
+
+    @property
+    def device_info(self):
+        dev_reg = dr.async_get(self.hass)
+        hub_device = dev_reg.async_get_device_by_identifier((DOMAIN, HUB_IDENTIFIER), self.hub.entry.entry_id)
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._device_id)},
+            via_device_id=hub_device.id if hub_device else None,
+        )
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_LAST_SEEN_UPDATE.format(device_id=self._device_id),
+                self.async_write_ha_state,
+            )
         )

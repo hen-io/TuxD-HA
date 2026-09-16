@@ -10,13 +10,16 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
     HUB_IDENTIFIER,
     ISSUE_PENDING_DEVICES,
     PLATFORMS,
+    SIGNAL_DEVICE_APPROVED,
     SIGNAL_HUB_STATS_UPDATE,
+    SIGNAL_LAST_SEEN_UPDATE,
     SIGNAL_NEW_ENTITY,
     SIGNAL_REMOVE_ENTITY,
     SIGNAL_STATE_UPDATE,
@@ -40,6 +43,7 @@ class TuxdHub:
         self.pending_devices = {}
 
         self.devices = {}
+        self.device_last_seen = {}
         self.entities = {}
         self.key_to_unique_ids = {}
         self._device_generation = {}
@@ -96,6 +100,7 @@ class TuxdHub:
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s approved and issued its own key", device_id)
         self._notify_stats_changed()
+        async_dispatcher_send(self.hass, SIGNAL_DEVICE_APPROVED, device_id)
         return new_key
 
     async def trust_device_key(self, device_id):
@@ -112,6 +117,7 @@ class TuxdHub:
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s approved, trusting the key it already presented", device_id)
         self._notify_stats_changed()
+        async_dispatcher_send(self.hass, SIGNAL_DEVICE_APPROVED, device_id)
         return presented_key
 
     async def set_device_key(self, device_id, key):
@@ -128,6 +134,7 @@ class TuxdHub:
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s given a manually-set key", device_id)
         self._notify_stats_changed()
+        async_dispatcher_send(self.hass, SIGNAL_DEVICE_APPROVED, device_id)
         return True, None
 
     async def rotate_device_key(self, device_id):
@@ -171,6 +178,7 @@ class TuxdHub:
 
     async def remove_device(self, device_id):
         await self.revoke_device(device_id)
+        self.device_last_seen.pop(device_id, None)
         if device_id in self.pending_devices:
             self.pending_devices.pop(device_id, None)
             await self._persist()
@@ -189,6 +197,10 @@ class TuxdHub:
             uids.difference_update(uid for uid, _domain in stale)
 
         self._notify_stats_changed()
+
+    def _touch_last_seen(self, device_id):
+        self.device_last_seen[device_id] = dt_util.utcnow()
+        async_dispatcher_send(self.hass, SIGNAL_LAST_SEEN_UPDATE.format(device_id=device_id))
 
     def _notify_stats_changed(self):
         async_dispatcher_send(self.hass, SIGNAL_HUB_STATS_UPDATE)
@@ -229,6 +241,7 @@ class TuxdHub:
             via_device_id=hub_device.id if hub_device else None,
         )
         _LOGGER.info("TuxD device connected: %s", device_id)
+        self._touch_last_seen(device_id)
 
         self._device_generation[device_id] = self._device_generation.get(device_id, 0) + 1
         self.hass.async_create_task(
@@ -350,6 +363,8 @@ class TuxdHub:
             msg = json.loads(raw)
         except Exception:
             return
+
+        self._touch_last_seen(device_id)
 
         mtype = msg.get("type")
         if mtype == "discovery":
@@ -479,10 +494,15 @@ class TuxdHub:
         ws = info["ws"]
         asyncio.create_task(ws.send_str(json.dumps({"type": "command", "key": key, "payload": payload})))
 
-    def restart_all_devices(self):
+    _FLEET_COMMAND_STAGGER_SECONDS = 2.0
+
+    async def _send_staggered(self, topic_suffix):
         for device_id in list(self.devices.keys()):
-            self.send_command(device_id, f"tuxd/{device_id}/restart/set", "PRESS")
+            self.send_command(device_id, f"tuxd/{device_id}/{topic_suffix}/set", "PRESS")
+            await asyncio.sleep(self._FLEET_COMMAND_STAGGER_SECONDS)
+
+    def restart_all_devices(self):
+        self.hass.async_create_task(self._send_staggered("restart"))
 
     def refresh_all_devices(self):
-        for device_id in list(self.devices.keys()):
-            self.send_command(device_id, f"tuxd/{device_id}/force_poll/set", "PRESS")
+        self.hass.async_create_task(self._send_staggered("force_poll"))

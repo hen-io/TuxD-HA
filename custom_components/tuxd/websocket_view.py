@@ -41,6 +41,7 @@ class TuxdWebSocketView(HomeAssistantView):
             hello = json.loads(hello_raw)
 
             if hello.get("type") != "hello":
+                _LOGGER.debug("TuxD: first message on a new connection wasn't a hello - closing")
                 await ws.send_str(json.dumps({"type": "error", "message": "expected hello"}))
                 await ws.close()
                 return ws
@@ -59,6 +60,9 @@ class TuxdWebSocketView(HomeAssistantView):
                 return ws
 
             if auth_result != "ok":
+                _LOGGER.warning(
+                    "TuxD: device %s failed authentication - closing connection", candidate_id
+                )
                 await ws.send_str(json.dumps({"type": "error", "message": "authentication failed"}))
                 await ws.close()
                 return ws
@@ -74,8 +78,12 @@ class TuxdWebSocketView(HomeAssistantView):
                     await self.hub.async_handle_message(device_id, msg.data)
                 elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE, WSMsgType.CLOSING):
                     break
-        except (TimeoutError, ConnectionResetError):
-            pass
+        except TimeoutError:
+            _LOGGER.info(
+                "TuxD: timed out waiting for a hello on a new connection (device=%s)", device_id
+            )
+        except ConnectionResetError:
+            _LOGGER.debug("TuxD: connection reset (device=%s)", device_id)
         except Exception:
             _LOGGER.exception("Unexpected error on TuxD websocket connection (device=%s)", device_id)
         finally:
