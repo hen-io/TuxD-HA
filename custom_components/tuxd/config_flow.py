@@ -65,6 +65,7 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             menu_options.append("pending")
         if hub.device_keys:
             menu_options.append("manage")
+            menu_options.append("view_keys")
         menu_options.append("manual_key")
 
         return self.async_show_menu(
@@ -154,6 +155,20 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("revoke", default=[]): cv.multi_select(choices),
         })
         return self.async_show_form(step_id="manage", data_schema=schema)
+
+
+    async def async_step_view_keys(self, user_input=None):
+        hub = self._hub()
+        if user_input is not None:
+            return self.async_create_entry(title="", data={})
+        if not hub.device_keys:
+            return self.async_create_entry(title="", data={})
+        lines = "\n".join(f"- **{d}**: `{k}`" for d, k in hub.device_keys.items())
+        return self.async_show_form(
+            step_id="view_keys",
+            data_schema=vol.Schema({}),
+            description_placeholders={"keys": lines},
+        )
 
 
     async def async_step_manual_key(self, user_input=None, errors=None):

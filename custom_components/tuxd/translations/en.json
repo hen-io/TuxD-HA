@@ -23,6 +23,7 @@
         "menu_options": {
           "pending": "Review new devices",
           "manage": "Manage approved devices",
+          "view_keys": "View device keys",
           "manual_key": "Set a specific key"
         }
       },
@@ -42,6 +43,10 @@
           "rotate": "Rotate key",
           "revoke": "Revoke"
         }
+      },
+      "view_keys": {
+        "title": "Current device keys",
+        "description": "{keys}"
       },
       "manual_key": {
         "title": "Set a specific key",

@@ -4,6 +4,7 @@ import logging
 import secrets
 
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -51,6 +52,7 @@ class TuxdHub:
         return "pending"
 
     def record_pending(self, device_id, hello, presented_key=None):
+        self._resync_from_entry()
         if device_id not in self.pending_devices and len(self.pending_devices) >= _MAX_PENDING_DEVICES:
             _LOGGER.warning(
                 "TuxD: pending-devices list is full (%d) - ignoring pairing attempt from %s",
@@ -67,6 +69,7 @@ class TuxdHub:
         _LOGGER.info("TuxD: device %s is awaiting approval", device_id)
 
     def approve_device(self, device_id):
+        self._resync_from_entry()
         if device_id not in self.pending_devices:
             return None
         new_key = secrets.token_hex(32)
@@ -79,6 +82,7 @@ class TuxdHub:
         return new_key
 
     def trust_device_key(self, device_id):
+        self._resync_from_entry()
         info = self.pending_devices.get(device_id)
         if not info:
             return None
@@ -94,6 +98,7 @@ class TuxdHub:
         return presented_key
 
     def set_device_key(self, device_id, key):
+        self._resync_from_entry()
         key = (key or "").strip()
         if not key:
             return False, "empty"
@@ -109,6 +114,7 @@ class TuxdHub:
         return True, None
 
     def rotate_device_key(self, device_id):
+        self._resync_from_entry()
         if device_id not in self.device_keys:
             return None
         new_key = secrets.token_hex(32)
@@ -118,6 +124,7 @@ class TuxdHub:
         return new_key
 
     def reject_device(self, device_id):
+        self._resync_from_entry()
         if device_id in self.pending_devices:
             self.pending_devices.pop(device_id, None)
             self._persist()
@@ -139,6 +146,7 @@ class TuxdHub:
             ir.async_delete_issue(self.hass, DOMAIN, ISSUE_PENDING_DEVICES)
 
     def revoke_device(self, device_id):
+        self._resync_from_entry()
         if device_id in self.device_keys:
             self.device_keys.pop(device_id, None)
             self._persist()
@@ -167,6 +175,11 @@ class TuxdHub:
 
     def _notify_stats_changed(self):
         async_dispatcher_send(self.hass, SIGNAL_HUB_STATS_UPDATE)
+
+    def _resync_from_entry(self):
+        self.pairing_key = self.entry.data.get("pairing_key", self.pairing_key)
+        self.device_keys = dict(self.entry.data.get("device_keys", self.device_keys))
+        self.pending_devices = dict(self.entry.data.get("pending_devices", self.pending_devices))
 
     def _persist(self):
         data = {
@@ -213,19 +226,33 @@ class TuxdHub:
             (uid, e.get("domain")) for uid, e in self.entities.items()
             if e.get("device_id") == device_id and e.get("_generation") != generation
         ]
-        if not stale:
-            return
         for uid, domain in stale:
             self.entities.pop(uid, None)
             if domain:
                 async_dispatcher_send(self.hass, SIGNAL_REMOVE_ENTITY.format(domain=domain), uid)
         for uids in self.key_to_unique_ids.values():
             uids.difference_update(uid for uid, _domain in stale)
-        _LOGGER.info(
-            "TuxD: device %s no longer announces %d entit%s - removed",
-            device_id, len(stale), "y" if len(stale) == 1 else "ies",
-        )
-        self._notify_stats_changed()
+        removed = len(stale)
+
+        dev_reg = dr.async_get(self.hass)
+        device_entry = dev_reg.async_get_device(identifiers={(DOMAIN, device_id)})
+        if device_entry is not None:
+            ent_reg = er.async_get(self.hass)
+            confirmed = {
+                uid for uid, e in self.entities.items()
+                if e.get("device_id") == device_id and e.get("_generation") == generation
+            }
+            for reg_entry in list(er.async_entries_for_device(ent_reg, device_entry.id, include_disabled_entities=True)):
+                if reg_entry.unique_id not in confirmed:
+                    ent_reg.async_remove(reg_entry.entity_id)
+                    removed += 1
+
+        if removed:
+            _LOGGER.info(
+                "TuxD: device %s no longer announces %d entit%s - removed",
+                device_id, removed, "y" if removed == 1 else "ies",
+            )
+            self._notify_stats_changed()
 
     def async_set_ws(self, device_id, ws):
         self.devices.setdefault(device_id, {})["ws"] = ws
