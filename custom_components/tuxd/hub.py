@@ -14,6 +14,7 @@ from .const import (
     PLATFORMS,
     SIGNAL_HUB_STATS_UPDATE,
     SIGNAL_NEW_ENTITY,
+    SIGNAL_REMOVE_ENTITY,
     SIGNAL_STATE_UPDATE,
 )
 
@@ -151,11 +152,13 @@ class TuxdHub:
         if info and info.get("ws") is not None:
             asyncio.create_task(info["ws"].close())
 
-        stale = [uid for uid, e in self.entities.items() if e.get("device_id") == device_id]
-        for uid in stale:
+        stale = [(uid, e.get("domain")) for uid, e in self.entities.items() if e.get("device_id") == device_id]
+        for uid, domain in stale:
             self.entities.pop(uid, None)
+            if domain:
+                async_dispatcher_send(self.hass, SIGNAL_REMOVE_ENTITY.format(domain=domain), uid)
         for uids in self.key_to_unique_ids.values():
-            uids.difference_update(stale)
+            uids.difference_update(uid for uid, _domain in stale)
 
         self._notify_stats_changed()
 
@@ -293,6 +296,9 @@ class TuxdHub:
         for uid in stale:
             self.entities.pop(uid, None)
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
+            async_dispatcher_send(self.hass, SIGNAL_REMOVE_ENTITY.format(domain=domain), uid)
+        for uids in self.key_to_unique_ids.values():
+            uids.difference_update(stale)
         if object_id in ("system_error", "host_update", "self_update"):
             self._notify_stats_changed()
 

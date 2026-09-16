@@ -1,7 +1,39 @@
+from homeassistant.core import callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import Entity, DeviceInfo, EntityCategory
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_STATE_UPDATE
+from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_NEW_ENTITY, SIGNAL_REMOVE_ENTITY, SIGNAL_STATE_UPDATE
+
+
+def async_setup_dynamic_platform(hass, entry, async_add_entities, domain_key, entity_cls, hub):
+    added = set()
+
+    @callback
+    def _add(unique_id):
+        if unique_id in added:
+            return
+        added.add(unique_id)
+        async_add_entities([entity_cls(hub, unique_id)])
+
+    @callback
+    def _remove(unique_id):
+        added.discard(unique_id)
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(domain_key, DOMAIN, unique_id)
+        if entity_id:
+            ent_reg.async_remove(entity_id)
+
+    for uid, e in list(hub.entities.items()):
+        if e.get("domain") == domain_key:
+            _add(uid)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_NEW_ENTITY.format(domain=domain_key), _add)
+    )
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_REMOVE_ENTITY.format(domain=domain_key), _remove)
+    )
 
 
 _READ_ONLY_ENTITY_CLASSES = frozenset({"TuxdSensor", "TuxdBinarySensor", "TuxdUpdate"})
