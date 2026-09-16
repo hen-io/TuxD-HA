@@ -47,3 +47,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         ir.async_delete_issue(hass, DOMAIN, ISSUE_PENDING_DEVICES)
     return unloaded
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    hub = hass.data[DOMAIN][entry.entry_id]
+    for domain, identifier in device_entry.identifiers:
+        if domain != DOMAIN:
+            continue
+        if identifier == HUB_IDENTIFIER:
+            return False
+        hub.remove_device(identifier)
+    return True

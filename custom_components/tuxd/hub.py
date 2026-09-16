@@ -94,6 +94,25 @@ class TuxdHub:
             self._persist()
             self._notify_stats_changed()
 
+    def remove_device(self, device_id):
+        self.revoke_device(device_id)
+        if device_id in self.pending_devices:
+            self.pending_devices.pop(device_id, None)
+            self._persist()
+            self._sync_pending_issue()
+
+        info = self.devices.pop(device_id, None)
+        if info and info.get("ws") is not None:
+            asyncio.create_task(info["ws"].close())
+
+        stale = [uid for uid, e in self.entities.items() if e.get("device_id") == device_id]
+        for uid in stale:
+            self.entities.pop(uid, None)
+        for uids in self.key_to_unique_ids.values():
+            uids.difference_update(stale)
+
+        self._notify_stats_changed()
+
     def _notify_stats_changed(self):
         async_dispatcher_send(self.hass, SIGNAL_HUB_STATS_UPDATE)
 
