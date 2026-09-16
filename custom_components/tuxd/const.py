@@ -13,6 +13,7 @@ SIGNAL_STATE_UPDATE = "tuxd_state_{unique_id}"
 SIGNAL_HUB_STATS_UPDATE = "tuxd_hub_stats_update"
 SIGNAL_LAST_SEEN_UPDATE = "tuxd_last_seen_{device_id}"
 SIGNAL_DEVICE_APPROVED = "tuxd_device_approved"
+SIGNAL_OFFLINE_UPDATE_URL_CHANGED = "tuxd_offline_update_url_changed"
 
 PLATFORMS = [
     "sensor",

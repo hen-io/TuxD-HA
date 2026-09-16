@@ -21,6 +21,7 @@ from .const import (
     SIGNAL_HUB_STATS_UPDATE,
     SIGNAL_LAST_SEEN_UPDATE,
     SIGNAL_NEW_ENTITY,
+    SIGNAL_OFFLINE_UPDATE_URL_CHANGED,
     SIGNAL_REMOVE_ENTITY,
     SIGNAL_STATE_UPDATE,
 )
@@ -28,6 +29,13 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 _MAX_PENDING_DEVICES = 50
+
+
+def _is_stats_relevant_object_id(object_id):
+    object_id = object_id or ""
+    return object_id in ("system_error", "host_update", "self_update") or (
+        object_id.startswith("disk_") and object_id.endswith("_smart_errors")
+    )
 
 
 class TuxdHub:
@@ -48,6 +56,7 @@ class TuxdHub:
         self.key_to_unique_ids = {}
         self._device_generation = {}
         self._tty_sessions = {}
+        self.offline_update_url = ""
 
     async def async_load(self):
         stored = await self._store.async_load()
@@ -440,7 +449,7 @@ class TuxdHub:
             async_dispatcher_send(self.hass, SIGNAL_NEW_ENTITY.format(domain=domain), unique_id)
         else:
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=unique_id))
-        if object_id in ("system_error", "host_update", "self_update"):
+        if _is_stats_relevant_object_id(object_id):
             self._notify_stats_changed()
 
     def _handle_discovery_clear(self, device_id, msg):
@@ -457,7 +466,7 @@ class TuxdHub:
             async_dispatcher_send(self.hass, SIGNAL_REMOVE_ENTITY.format(domain=domain), uid)
         for uids in self.key_to_unique_ids.values():
             uids.difference_update(stale)
-        if object_id in ("system_error", "host_update", "self_update"):
+        if _is_stats_relevant_object_id(object_id):
             self._notify_stats_changed()
 
     def _handle_state(self, device_id, msg):
@@ -482,7 +491,7 @@ class TuxdHub:
             else:
                 entry["state"] = value
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
-            if entry.get("object_id") in ("system_error", "host_update", "self_update"):
+            if _is_stats_relevant_object_id(entry.get("object_id") or ""):
                 self._notify_stats_changed()
 
 
@@ -496,9 +505,9 @@ class TuxdHub:
 
     _FLEET_COMMAND_STAGGER_SECONDS = 2.0
 
-    async def _send_staggered(self, topic_suffix):
+    async def _send_staggered(self, topic_suffix, payload="PRESS"):
         for device_id in list(self.devices.keys()):
-            self.send_command(device_id, f"tuxd/{device_id}/{topic_suffix}/set", "PRESS")
+            self.send_command(device_id, f"tuxd/{device_id}/{topic_suffix}/set", payload)
             await asyncio.sleep(self._FLEET_COMMAND_STAGGER_SECONDS)
 
     def restart_all_devices(self):
@@ -506,3 +515,15 @@ class TuxdHub:
 
     def refresh_all_devices(self):
         self.hass.async_create_task(self._send_staggered("force_poll"))
+
+    def set_offline_update_url(self, url):
+        self.offline_update_url = (url or "").strip()
+        async_dispatcher_send(self.hass, SIGNAL_OFFLINE_UPDATE_URL_CHANGED)
+
+    def update_all_devices(self):
+        if self.offline_update_url:
+            self.hass.async_create_task(
+                self._send_staggered("self_update/install_from_url", payload=self.offline_update_url)
+            )
+        else:
+            self.hass.async_create_task(self._send_staggered("self_update"))

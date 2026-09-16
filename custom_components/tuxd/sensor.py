@@ -19,9 +19,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([
         TuxdConfiguredDevicesSensor(hub),
         TuxdOnlineDevicesSensor(hub),
+        TuxdOfflineDevicesSensor(hub),
         TuxdDevicesWithErrorsSensor(hub),
         TuxdDevicesWithHostUpdatesSensor(hub),
         TuxdDevicesWithScriptUpdatesSensor(hub),
+        TuxdDevicesWithSmartErrorsSensor(hub),
     ])
 
     added = set()
@@ -113,6 +115,15 @@ class TuxdOnlineDevicesSensor(TuxdHubStatSensor):
         return len(self.hub.devices)
 
 
+class TuxdOfflineDevicesSensor(TuxdHubStatSensor):
+    def __init__(self, hub):
+        super().__init__(hub, "offline_devices", "TuxD Offline Devices", "mdi:server-network-off")
+
+    @property
+    def native_value(self):
+        return max(0, len(self.hub.device_keys) - len(self.hub.devices))
+
+
 class TuxdDevicesWithErrorsSensor(TuxdHubStatSensor):
     def __init__(self, hub):
         super().__init__(hub, "devices_with_errors", "TuxD Devices With Errors", "mdi:alert-circle-outline")
@@ -147,6 +158,25 @@ class TuxdDevicesWithScriptUpdatesSensor(TuxdHubStatSensor):
             1 for uid, e in self.hub.entities.items()
             if e.get("object_id") == "self_update" and _has_update(self.hub, uid)
         )
+
+
+class TuxdDevicesWithSmartErrorsSensor(TuxdHubStatSensor):
+    def __init__(self, hub):
+        super().__init__(hub, "devices_with_smart_errors", "TuxD Devices With SMART Errors", "mdi:harddisk-alert")
+
+    @property
+    def native_value(self):
+        devices = set()
+        for e in self.hub.entities.values():
+            object_id = e.get("object_id") or ""
+            if not (object_id.startswith("disk_") and object_id.endswith("_smart_errors")):
+                continue
+            try:
+                if float(e.get("state")) > 0:
+                    devices.add(e.get("device_id"))
+            except (TypeError, ValueError):
+                continue
+        return len(devices)
 
 
 class TuxdLastSeenSensor(SensorEntity):

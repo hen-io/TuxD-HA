@@ -14,6 +14,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([
         TuxdRestartAllButton(hub),
         TuxdRefreshAllButton(hub),
+        TuxdUpdateAllButton(hub),
     ])
 
 
@@ -52,3 +53,11 @@ class TuxdRefreshAllButton(TuxdHubButton):
 
     async def async_press(self) -> None:
         self.hub.refresh_all_devices()
+
+
+class TuxdUpdateAllButton(TuxdHubButton):
+    def __init__(self, hub):
+        super().__init__(hub, "update_all", "Update All Device Agents", "mdi:cloud-download")
+
+    async def async_press(self) -> None:
+        self.hub.update_all_devices()
