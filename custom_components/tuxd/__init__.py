@@ -17,6 +17,7 @@ _VIEW_KEY = f"{DOMAIN}_ws_view"
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub = TuxdHub(hass, entry)
+    await hub.async_load()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
     dev_reg = dr.async_get(hass)
@@ -58,5 +59,5 @@ async def async_remove_config_entry_device(
             continue
         if identifier == HUB_IDENTIFIER:
             return False
-        hub.remove_device(identifier)
+        await hub.remove_device(identifier)
     return True

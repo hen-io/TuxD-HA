@@ -94,13 +94,13 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             issued = {}
             for device_id in user_input.get("approve") or []:
-                new_key = hub.approve_device(device_id)
+                new_key = await hub.approve_device(device_id)
                 if new_key:
                     issued[device_id] = new_key
             for device_id in user_input.get("trust") or []:
-                hub.trust_device_key(device_id)
+                await hub.trust_device_key(device_id)
             for device_id in user_input.get("reject") or []:
-                hub.reject_device(device_id)
+                await hub.reject_device(device_id)
             if issued:
                 return await self.async_step_issued(issued=issued)
             return self.async_create_entry(title="", data={})
@@ -136,11 +136,11 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             issued = {}
             for device_id in user_input.get("rotate") or []:
-                new_key = hub.rotate_device_key(device_id)
+                new_key = await hub.rotate_device_key(device_id)
                 if new_key:
                     issued[device_id] = new_key
             for device_id in user_input.get("revoke") or []:
-                hub.revoke_device(device_id)
+                await hub.revoke_device(device_id)
             if issued:
                 return await self.async_step_issued(issued=issued)
             return self.async_create_entry(title="", data={})
@@ -175,7 +175,7 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         hub = self._hub()
 
         if user_input is not None:
-            ok, reason = hub.set_device_key(user_input.get("device"), (user_input.get("key") or "").strip())
+            ok, reason = await hub.set_device_key(user_input.get("device"), (user_input.get("key") or "").strip())
             if not ok:
                 return await self.async_step_manual_key(
                     errors={"key": "key_collision" if reason == "collision" else "key_required"}

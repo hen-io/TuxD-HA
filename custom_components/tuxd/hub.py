@@ -7,6 +7,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.storage import Store
 
 from .const import (
     DOMAIN,
@@ -31,14 +32,27 @@ class TuxdHub:
     def __init__(self, hass, entry):
         self.hass = hass
         self.entry = entry
-        self.pairing_key = entry.data.get("pairing_key", "")
-        self.device_keys = dict(entry.data.get("device_keys", {}))
-        self.pending_devices = dict(entry.data.get("pending_devices", {}))
+        self._store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}")
+        self.pairing_key = ""
+        self.device_keys = {}
+        self.pending_devices = {}
 
         self.devices = {}
         self.entities = {}
         self.key_to_unique_ids = {}
         self._device_generation = {}
+
+    async def async_load(self):
+        stored = await self._store.async_load()
+        if stored is not None:
+            self.pairing_key = stored.get("pairing_key", "")
+            self.device_keys = dict(stored.get("device_keys", {}))
+            self.pending_devices = dict(stored.get("pending_devices", {}))
+        else:
+            self.pairing_key = self.entry.data.get("pairing_key", "")
+            self.device_keys = dict(self.entry.data.get("device_keys", {}))
+            self.pending_devices = dict(self.entry.data.get("pending_devices", {}))
+            await self._persist()
 
         self._sync_pending_issue()
 
@@ -51,8 +65,8 @@ class TuxdHub:
             return "ok" if secrets.compare_digest(presented_key, known_key) else "rejected"
         return "pending"
 
-    def record_pending(self, device_id, hello, presented_key=None):
-        self._resync_from_entry()
+    async def record_pending(self, device_id, hello, presented_key=None):
+        await self._resync()
         if device_id not in self.pending_devices and len(self.pending_devices) >= _MAX_PENDING_DEVICES:
             _LOGGER.warning(
                 "TuxD: pending-devices list is full (%d) - ignoring pairing attempt from %s",
@@ -64,25 +78,25 @@ class TuxdHub:
             "sw_version": hello.get("sw_version"),
             "presented_key": presented_key,
         }
-        self._persist()
+        await self._persist()
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s is awaiting approval", device_id)
 
-    def approve_device(self, device_id):
-        self._resync_from_entry()
+    async def approve_device(self, device_id):
+        await self._resync()
         if device_id not in self.pending_devices:
             return None
         new_key = secrets.token_hex(32)
         self.device_keys[device_id] = new_key
         self.pending_devices.pop(device_id, None)
-        self._persist()
+        await self._persist()
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s approved and issued its own key", device_id)
         self._notify_stats_changed()
         return new_key
 
-    def trust_device_key(self, device_id):
-        self._resync_from_entry()
+    async def trust_device_key(self, device_id):
+        await self._resync()
         info = self.pending_devices.get(device_id)
         if not info:
             return None
@@ -91,14 +105,14 @@ class TuxdHub:
             return None
         self.device_keys[device_id] = presented_key
         self.pending_devices.pop(device_id, None)
-        self._persist()
+        await self._persist()
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s approved, trusting the key it already presented", device_id)
         self._notify_stats_changed()
         return presented_key
 
-    def set_device_key(self, device_id, key):
-        self._resync_from_entry()
+    async def set_device_key(self, device_id, key):
+        await self._resync()
         key = (key or "").strip()
         if not key:
             return False, "empty"
@@ -107,27 +121,27 @@ class TuxdHub:
                 return False, "collision"
         self.device_keys[device_id] = key
         self.pending_devices.pop(device_id, None)
-        self._persist()
+        await self._persist()
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s given a manually-set key", device_id)
         self._notify_stats_changed()
         return True, None
 
-    def rotate_device_key(self, device_id):
-        self._resync_from_entry()
+    async def rotate_device_key(self, device_id):
+        await self._resync()
         if device_id not in self.device_keys:
             return None
         new_key = secrets.token_hex(32)
         self.device_keys[device_id] = new_key
-        self._persist()
+        await self._persist()
         _LOGGER.info("TuxD: device %s issued a new key", device_id)
         return new_key
 
-    def reject_device(self, device_id):
-        self._resync_from_entry()
+    async def reject_device(self, device_id):
+        await self._resync()
         if device_id in self.pending_devices:
             self.pending_devices.pop(device_id, None)
-            self._persist()
+            await self._persist()
             self._sync_pending_issue()
 
     def _sync_pending_issue(self):
@@ -145,18 +159,18 @@ class TuxdHub:
         else:
             ir.async_delete_issue(self.hass, DOMAIN, ISSUE_PENDING_DEVICES)
 
-    def revoke_device(self, device_id):
-        self._resync_from_entry()
+    async def revoke_device(self, device_id):
+        await self._resync()
         if device_id in self.device_keys:
             self.device_keys.pop(device_id, None)
-            self._persist()
+            await self._persist()
             self._notify_stats_changed()
 
-    def remove_device(self, device_id):
-        self.revoke_device(device_id)
+    async def remove_device(self, device_id):
+        await self.revoke_device(device_id)
         if device_id in self.pending_devices:
             self.pending_devices.pop(device_id, None)
-            self._persist()
+            await self._persist()
             self._sync_pending_issue()
 
         info = self.devices.pop(device_id, None)
@@ -176,18 +190,21 @@ class TuxdHub:
     def _notify_stats_changed(self):
         async_dispatcher_send(self.hass, SIGNAL_HUB_STATS_UPDATE)
 
-    def _resync_from_entry(self):
-        self.pairing_key = self.entry.data.get("pairing_key", self.pairing_key)
-        self.device_keys = dict(self.entry.data.get("device_keys", self.device_keys))
-        self.pending_devices = dict(self.entry.data.get("pending_devices", self.pending_devices))
+    async def _resync(self):
+        fresh_store = Store(self.hass, 1, f"{DOMAIN}_{self.entry.entry_id}")
+        stored = await fresh_store.async_load()
+        if stored is not None:
+            self.pairing_key = stored.get("pairing_key", self.pairing_key)
+            self.device_keys = dict(stored.get("device_keys", self.device_keys))
+            self.pending_devices = dict(stored.get("pending_devices", self.pending_devices))
 
-    def _persist(self):
+    async def _persist(self):
         data = {
             "pairing_key": self.pairing_key,
             "device_keys": self.device_keys,
             "pending_devices": self.pending_devices,
         }
-        self.hass.config_entries.async_update_entry(self.entry, data=data)
+        await self._store.async_save(data)
 
 
     async def async_device_connected(self, device_id, hello):

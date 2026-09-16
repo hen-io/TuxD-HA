@@ -53,7 +53,7 @@ class TuxdWebSocketView(HomeAssistantView):
             )
 
             if auth_result == "pending":
-                self.hub.record_pending(candidate_id, hello, hello.get("auth"))
+                await self.hub.record_pending(candidate_id, hello, hello.get("auth"))
                 await ws.send_str(json.dumps({"type": "error", "message": "authentication failed"}))
                 await ws.close()
                 return ws

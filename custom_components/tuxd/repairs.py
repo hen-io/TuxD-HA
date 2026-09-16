@@ -18,11 +18,11 @@ class TuxdPendingDevicesRepairFlow(RepairsFlow):
         if user_input is not None:
             issued = {}
             for device_id in user_input.get("approve") or []:
-                new_key = hub.approve_device(device_id)
+                new_key = await hub.approve_device(device_id)
                 if new_key:
                     issued[device_id] = new_key
             for device_id in user_input.get("reject") or []:
-                hub.reject_device(device_id)
+                await hub.reject_device(device_id)
             if issued:
                 return await self.async_step_issued(issued=issued)
             return self.async_create_entry(data={})
