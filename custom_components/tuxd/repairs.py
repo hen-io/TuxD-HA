@@ -16,10 +16,15 @@ class TuxdPendingDevicesRepairFlow(RepairsFlow):
         hub = self.hass.data[DOMAIN][self.data["entry_id"]]
 
         if user_input is not None:
+            issued = {}
             for device_id in user_input.get("approve") or []:
-                hub.approve_device(device_id)
+                new_key = hub.approve_device(device_id)
+                if new_key:
+                    issued[device_id] = new_key
             for device_id in user_input.get("reject") or []:
                 hub.reject_device(device_id)
+            if issued:
+                return await self.async_step_issued(issued=issued)
             return self.async_create_entry(data={})
 
         pending = hub.pending_devices
@@ -33,6 +38,18 @@ class TuxdPendingDevicesRepairFlow(RepairsFlow):
             vol.Optional("reject", default=[]): cv.multi_select(choices),
         })
         return self.async_show_form(step_id="confirm", data_schema=schema)
+
+    async def async_step_issued(self, user_input=None, issued=None):
+        if issued is not None:
+            self._issued = issued
+        if user_input is not None:
+            return self.async_create_entry(data={})
+        lines = "\n".join(f"- **{d}**: `{k}`" for d, k in self._issued.items())
+        return self.async_show_form(
+            step_id="issued",
+            data_schema=vol.Schema({}),
+            description_placeholders={"keys": lines},
+        )
 
 
 async def async_create_fix_flow(hass: HomeAssistant, issue_id: str, data: dict | None) -> RepairsFlow:

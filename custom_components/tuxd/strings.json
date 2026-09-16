@@ -18,6 +18,14 @@
   "options": {
     "step": {
       "init": {
+        "title": "Manage TuxD devices",
+        "description": "Pairing key, for introducing a new device:\n\n`{pairing_key}`",
+        "menu_options": {
+          "approve": "Approve pending devices",
+          "manage": "Manage approved devices"
+        }
+      },
+      "approve": {
         "title": "Approve TuxD devices",
         "description": "These devices presented the pairing key and are waiting for you to confirm they're legitimate before they get their own permanent key and can report data or receive commands. Reject anything you don't recognize.\n\nPairing key, for introducing further new devices:\n\n`{pairing_key}`",
         "data": {
@@ -25,9 +33,17 @@
           "reject": "Reject"
         }
       },
+      "manage": {
+        "title": "Manage approved TuxD devices",
+        "description": "Rotate issues a device a brand new key (the old one stops working immediately) - useful if a key may have leaked. Revoke pulls a device's key without deleting it from Home Assistant - it can only reconnect after being re-approved with the current pairing key. To remove a device entirely, delete it from its own device page instead.",
+        "data": {
+          "rotate": "Rotate key",
+          "revoke": "Revoke"
+        }
+      },
       "no_pending": {
-        "title": "Approve TuxD devices",
-        "description": "No devices are currently waiting for approval.\n\nPairing key, for introducing a new device:\n\n`{pairing_key}`"
+        "title": "TuxD devices",
+        "description": "No devices are pending approval or approved yet.\n\nPairing key, for introducing a new device:\n\n`{pairing_key}`"
       },
       "issued": {
         "title": "New device keys",
@@ -48,6 +64,10 @@
               "approve": "Approve",
               "reject": "Reject"
             }
+          },
+          "issued": {
+            "title": "New device keys",
+            "description": "Paste each key into that device's own tuxd.conf under home-assistant.api_key. Shown only once:\n\n{keys}"
           }
         }
       }

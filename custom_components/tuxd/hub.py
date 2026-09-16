@@ -67,6 +67,15 @@ class TuxdHub:
         self._notify_stats_changed()
         return new_key
 
+    def rotate_device_key(self, device_id):
+        if device_id not in self.device_keys:
+            return None
+        new_key = secrets.token_hex(32)
+        self.device_keys[device_id] = new_key
+        self._persist()
+        _LOGGER.info("TuxD: device %s issued a new key", device_id)
+        return new_key
+
     def reject_device(self, device_id):
         if device_id in self.pending_devices:
             self.pending_devices.pop(device_id, None)

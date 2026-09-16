@@ -48,8 +48,30 @@ class TuxdConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class TuxdOptionsFlow(config_entries.OptionsFlow):
 
+    def _hub(self):
+        return self.hass.data[DOMAIN][self.config_entry.entry_id]
+
     async def async_step_init(self, user_input=None):
-        hub = self.hass.data[DOMAIN][self.config_entry.entry_id]
+        hub = self._hub()
+        if not hub.pending_devices and not hub.device_keys:
+            return self.async_show_form(
+                step_id="no_pending", data_schema=vol.Schema({}),
+                description_placeholders={"pairing_key": hub.pairing_key},
+            )
+
+        menu_options = []
+        if hub.pending_devices:
+            menu_options.append("approve")
+        if hub.device_keys:
+            menu_options.append("manage")
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=menu_options,
+            description_placeholders={"pairing_key": hub.pairing_key},
+        )
+
+    async def async_step_approve(self, user_input=None):
+        hub = self._hub()
 
         if user_input is not None:
             approve = user_input.get("approve") or []
@@ -67,10 +89,7 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
 
         pending = hub.pending_devices
         if not pending:
-            return self.async_show_form(
-                step_id="no_pending", data_schema=vol.Schema({}),
-                description_placeholders={"pairing_key": hub.pairing_key},
-            )
+            return self.async_create_entry(title="", data={})
 
         choices = {
             device_id: f"{device_id} (model: {info.get('model') or 'unknown'}, "
@@ -82,14 +101,42 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("reject", default=[]): cv.multi_select(choices),
         })
         return self.async_show_form(
-            step_id="init", data_schema=schema,
+            step_id="approve", data_schema=schema,
             description_placeholders={"pairing_key": hub.pairing_key},
         )
+
+    async def async_step_manage(self, user_input=None):
+        hub = self._hub()
+
+        if user_input is not None:
+            rotate = user_input.get("rotate") or []
+            revoke = user_input.get("revoke") or []
+            issued = {}
+            for device_id in rotate:
+                new_key = hub.rotate_device_key(device_id)
+                if new_key:
+                    issued[device_id] = new_key
+            for device_id in revoke:
+                hub.revoke_device(device_id)
+            if issued:
+                return await self.async_step_issued(issued=issued)
+            return self.async_create_entry(title="", data={})
+
+        approved = hub.device_keys
+        if not approved:
+            return self.async_create_entry(title="", data={})
+
+        choices = {device_id: device_id for device_id in approved}
+        schema = vol.Schema({
+            vol.Optional("rotate", default=[]): cv.multi_select(choices),
+            vol.Optional("revoke", default=[]): cv.multi_select(choices),
+        })
+        return self.async_show_form(step_id="manage", data_schema=schema)
 
     async def async_step_no_pending(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data={})
-        hub = self.hass.data[DOMAIN][self.config_entry.entry_id]
+        hub = self._hub()
         return self.async_show_form(
             step_id="no_pending", data_schema=vol.Schema({}),
             description_placeholders={"pairing_key": hub.pairing_key},
