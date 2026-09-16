@@ -67,7 +67,10 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
 
         pending = hub.pending_devices
         if not pending:
-            return self.async_show_form(step_id="no_pending", data_schema=vol.Schema({}))
+            return self.async_show_form(
+                step_id="no_pending", data_schema=vol.Schema({}),
+                description_placeholders={"pairing_key": hub.pairing_key},
+            )
 
         choices = {
             device_id: f"{device_id} (model: {info.get('model') or 'unknown'}, "
