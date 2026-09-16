@@ -19,26 +19,15 @@
     "step": {
       "init": {
         "title": "Manage TuxD devices",
-        "description": "Pairing key, for introducing a new device:\n\n`{pairing_key}`",
-        "menu_options": {
-          "approve": "Approve pending devices",
-          "manage": "Manage approved devices"
-        }
-      },
-      "approve": {
-        "title": "Approve TuxD devices",
-        "description": "These devices presented the pairing key and are waiting for you to confirm they're legitimate before they get their own permanent key and can report data or receive commands. Reject anything you don't recognize.\n\nPairing key, for introducing further new devices:\n\n`{pairing_key}`",
+        "description": "Approve mints a brand new key for a device - paste it into that device's own tuxd.conf. Trust uses the key a device already presented as-is, so it doesn't need to change anything (only offered for a device that presented its own value, not the shared pairing key below). Reject dismisses a pending device. Rotate issues an already-approved device a fresh key (e.g. one that may have leaked); Revoke pulls its key without deleting it from Home Assistant - it can only reconnect after being re-approved. Or set a specific key yourself below, for either a pending or an approved device. To remove a device entirely, delete it from its own device page instead.\n\nPairing key, for introducing a new device:\n\n`{pairing_key}`",
         "data": {
-          "approve": "Approve",
-          "reject": "Reject"
-        }
-      },
-      "manage": {
-        "title": "Manage approved TuxD devices",
-        "description": "Rotate issues a device a brand new key (the old one stops working immediately) - useful if a key may have leaked. Revoke pulls a device's key without deleting it from Home Assistant - it can only reconnect after being re-approved with the current pairing key. To remove a device entirely, delete it from its own device page instead.",
-        "data": {
+          "approve": "Approve (new key)",
+          "trust": "Trust (use its own key)",
+          "reject": "Reject",
           "rotate": "Rotate key",
-          "revoke": "Revoke"
+          "revoke": "Revoke",
+          "manual_key_device": "Set a specific key for...",
+          "manual_key_value": "...to this key"
         }
       },
       "no_pending": {
@@ -49,6 +38,10 @@
         "title": "New device keys",
         "description": "Paste each key into that device's own tuxd.conf under home-assistant.api_key. Shown only once:\n\n{keys}"
       }
+    },
+    "error": {
+      "key_required": "Pick a device AND enter a key - both are needed to set one manually.",
+      "key_collision": "That key is already used by a different device - each device needs its own unique key."
     }
   },
   "issues": {

@@ -19,6 +19,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+_MAX_PENDING_DEVICES = 50
+
 
 class TuxdHub:
 
@@ -42,18 +44,23 @@ class TuxdHub:
         known_key = self.device_keys.get(device_id)
         if known_key is not None:
             return "ok" if secrets.compare_digest(presented_key, known_key) else "rejected"
-        if self.pairing_key and secrets.compare_digest(presented_key, self.pairing_key):
-            return "pending"
-        return "rejected"
+        return "pending"
 
-    def record_pending(self, device_id, hello):
+    def record_pending(self, device_id, hello, presented_key=None):
+        if device_id not in self.pending_devices and len(self.pending_devices) >= _MAX_PENDING_DEVICES:
+            _LOGGER.warning(
+                "TuxD: pending-devices list is full (%d) - ignoring pairing attempt from %s",
+                _MAX_PENDING_DEVICES, device_id,
+            )
+            return
         self.pending_devices[device_id] = {
             "model": hello.get("model"),
             "sw_version": hello.get("sw_version"),
+            "presented_key": presented_key,
         }
         self._persist()
         self._sync_pending_issue()
-        _LOGGER.info("TuxD: device %s presented the pairing key and is awaiting approval", device_id)
+        _LOGGER.info("TuxD: device %s is awaiting approval", device_id)
 
     def approve_device(self, device_id):
         if device_id not in self.pending_devices:
@@ -66,6 +73,36 @@ class TuxdHub:
         _LOGGER.info("TuxD: device %s approved and issued its own key", device_id)
         self._notify_stats_changed()
         return new_key
+
+    def trust_device_key(self, device_id):
+        info = self.pending_devices.get(device_id)
+        if not info:
+            return None
+        presented_key = info.get("presented_key")
+        if not presented_key or presented_key == self.pairing_key:
+            return None
+        self.device_keys[device_id] = presented_key
+        self.pending_devices.pop(device_id, None)
+        self._persist()
+        self._sync_pending_issue()
+        _LOGGER.info("TuxD: device %s approved, trusting the key it already presented", device_id)
+        self._notify_stats_changed()
+        return presented_key
+
+    def set_device_key(self, device_id, key):
+        key = (key or "").strip()
+        if not key:
+            return False, "empty"
+        for other_id, other_key in self.device_keys.items():
+            if other_id != device_id and secrets.compare_digest(other_key, key):
+                return False, "collision"
+        self.device_keys[device_id] = key
+        self.pending_devices.pop(device_id, None)
+        self._persist()
+        self._sync_pending_issue()
+        _LOGGER.info("TuxD: device %s given a manually-set key", device_id)
+        self._notify_stats_changed()
+        return True, None
 
     def rotate_device_key(self, device_id):
         if device_id not in self.device_keys:
