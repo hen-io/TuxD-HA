@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up TuxD",
+        "description": "TuxD agents will connect directly to this Home Assistant instance instead of through MQTT. This is a one-time *pairing* key, not a permanent credential - paste it into a new agent's tuxd.conf under home-assistant.api_key (with tuxd.connection_mode set to \"direct\") to introduce it, then open this integration's Configure button to approve it and issue it its own permanent key:\n\n`{api_key}`\n\nThis key is shown only once - if you lose it, use Reconfigure to generate a new one. Devices you've already approved are unaffected by that."
+      },
+      "reconfigure": {
+        "title": "Rotate TuxD pairing key",
+        "description": "This replaces the pairing key used to introduce brand-new devices. Already-approved devices keep their own dedicated keys and are not affected - this only stops anyone still holding the old pairing key from introducing a new device:\n\n`{api_key}`"
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "TuxD is already set up - only one instance is needed, since every agent shares the same connection endpoint.",
+      "reconfigure_successful": "Pairing key rotated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Approve TuxD devices",
+        "description": "These devices presented the pairing key and are waiting for you to confirm they're legitimate before they get their own permanent key and can report data or receive commands. Reject anything you don't recognize.",
+        "data": {
+          "approve": "Approve",
+          "reject": "Reject"
+        }
+      },
+      "no_pending": {
+        "title": "Approve TuxD devices",
+        "description": "No devices are currently waiting for approval."
+      },
+      "issued": {
+        "title": "New device keys",
+        "description": "Paste each key into that device's own tuxd.conf under home-assistant.api_key. Shown only once:\n\n{keys}"
+      }
+    }
+  }
+}
