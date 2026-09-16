@@ -3,9 +3,10 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType
 
-from .const import DOMAIN, HUB_IDENTIFIER, PLATFORMS
+from .const import DOMAIN, HUB_IDENTIFIER, ISSUE_PENDING_DEVICES, PLATFORMS
 from .hub import TuxdHub
 from .websocket_view import TuxdWebSocketView
 
@@ -44,4 +45,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_PENDING_DEVICES)
     return unloaded

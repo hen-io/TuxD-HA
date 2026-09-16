@@ -4,9 +4,18 @@ import logging
 import secrets
 
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DOMAIN, HUB_IDENTIFIER, PLATFORMS, SIGNAL_HUB_STATS_UPDATE, SIGNAL_NEW_ENTITY, SIGNAL_STATE_UPDATE
+from .const import (
+    DOMAIN,
+    HUB_IDENTIFIER,
+    ISSUE_PENDING_DEVICES,
+    PLATFORMS,
+    SIGNAL_HUB_STATS_UPDATE,
+    SIGNAL_NEW_ENTITY,
+    SIGNAL_STATE_UPDATE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +32,8 @@ class TuxdHub:
         self.devices = {}
         self.entities = {}
         self.key_to_unique_ids = {}
+
+        self._sync_pending_issue()
 
 
     def check_auth(self, device_id, presented_key):
@@ -41,6 +52,7 @@ class TuxdHub:
             "sw_version": hello.get("sw_version"),
         }
         self._persist()
+        self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s presented the pairing key and is awaiting approval", device_id)
 
     def approve_device(self, device_id):
@@ -50,6 +62,7 @@ class TuxdHub:
         self.device_keys[device_id] = new_key
         self.pending_devices.pop(device_id, None)
         self._persist()
+        self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s approved and issued its own key", device_id)
         self._notify_stats_changed()
         return new_key
@@ -58,6 +71,22 @@ class TuxdHub:
         if device_id in self.pending_devices:
             self.pending_devices.pop(device_id, None)
             self._persist()
+            self._sync_pending_issue()
+
+    def _sync_pending_issue(self):
+        if self.pending_devices:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                ISSUE_PENDING_DEVICES,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=ISSUE_PENDING_DEVICES,
+                translation_placeholders={"count": str(len(self.pending_devices))},
+                data={"entry_id": self.entry.entry_id},
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, ISSUE_PENDING_DEVICES)
 
     def revoke_device(self, device_id):
         if device_id in self.device_keys:

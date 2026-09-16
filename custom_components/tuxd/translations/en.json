@@ -34,5 +34,23 @@
         "description": "Paste each key into that device's own tuxd.conf under home-assistant.api_key. Shown only once:\n\n{keys}"
       }
     }
+  },
+  "issues": {
+    "pending_devices": {
+      "title": "TuxD device(s) awaiting approval",
+      "description": "{count} TuxD device(s) presented the pairing key and are waiting for you to confirm they're legitimate before they get their own permanent key and can report data or receive commands. Click Fix to review them.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Approve TuxD devices",
+            "description": "These devices presented the pairing key and are waiting for you to confirm they're legitimate before they get their own permanent key and can report data or receive commands. Reject anything you don't recognize.",
+            "data": {
+              "approve": "Approve",
+              "reject": "Reject"
+            }
+          }
+        }
+      }
+    }
   }
 }
