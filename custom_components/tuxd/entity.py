@@ -81,7 +81,13 @@ class TuxdEntity(Entity):
     def suggested_object_id(self):
         default_entity_id = self._config.get("default_entity_id")
         if default_entity_id and "." in default_entity_id:
-            return default_entity_id.split(".", 1)[1]
+            object_id = default_entity_id.split(".", 1)[1]
+            device = self._config.get("device") or {}
+            device_slug = slugify(device.get("name") or self._entry.get("device_id") or "")
+            prefix = f"{device_slug}_"
+            if device_slug and object_id.startswith(prefix):
+                return object_id[len(prefix):]
+            return object_id
 
         object_id = self._entry.get("object_id")
         if object_id:
