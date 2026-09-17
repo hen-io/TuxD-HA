@@ -24,6 +24,7 @@
           "pending": "Review new devices",
           "manage": "Manage approved devices",
           "view_keys": "View device keys",
+          "config": "Edit device configuration",
           "manual_key": "Set a specific key"
         }
       },
