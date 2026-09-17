@@ -3,6 +3,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import Entity, DeviceInfo, EntityCategory
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util import slugify
 
 from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_NEW_ENTITY, SIGNAL_REMOVE_ENTITY, SIGNAL_STATE_UPDATE
 
@@ -81,6 +82,11 @@ class TuxdEntity(Entity):
         default_entity_id = self._config.get("default_entity_id")
         if default_entity_id and "." in default_entity_id:
             return default_entity_id.split(".", 1)[1]
+
+        device_id = self._entry.get("device_id")
+        object_id = self._entry.get("object_id")
+        if device_id and object_id:
+            return slugify(f"{device_id}_{object_id}")
         return None
 
     @property

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import secrets
+import time
 import uuid
 
 from homeassistant.components import websocket_api
@@ -59,6 +60,7 @@ class TuxdHub:
 
         self.devices = {}
         self.device_last_seen = {}
+        self._last_seen_dispatched = {}
         self.entities = {}
         self.key_to_unique_ids = {}
         self._device_generation = {}
@@ -215,8 +217,15 @@ class TuxdHub:
 
         self._notify_stats_changed()
 
+    _LAST_SEEN_DISPATCH_MIN_INTERVAL = 60.0
+
     def _touch_last_seen(self, device_id):
         self.device_last_seen[device_id] = dt_util.utcnow()
+        now = time.monotonic()
+        last_dispatch = self._last_seen_dispatched.get(device_id, 0.0)
+        if now - last_dispatch < self._LAST_SEEN_DISPATCH_MIN_INTERVAL:
+            return
+        self._last_seen_dispatched[device_id] = now
         async_dispatcher_send(self.hass, SIGNAL_LAST_SEEN_UPDATE.format(device_id=device_id))
 
     def _notify_stats_changed(self):
