@@ -83,9 +83,8 @@ class TuxdEntity(Entity):
         if default_entity_id and "." in default_entity_id:
             return default_entity_id.split(".", 1)[1]
 
-        device_id = self._entry.get("device_id")
         object_id = self._entry.get("object_id")
-        if device_id and object_id:
+        if object_id:
             return slugify(object_id)
 
         return None
