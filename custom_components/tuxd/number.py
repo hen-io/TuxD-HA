@@ -5,6 +5,7 @@ from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from .const import (
     DOMAIN,
     HUB_IDENTIFIER,
+    SIGNAL_LAST_SEEN_UPDATE_INTERVAL_CHANGED,
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
     SIGNAL_THRESHOLDS_CHANGED,
     THRESHOLD_METRICS,
@@ -22,6 +23,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdThresholdNumber(hub, *row) for row in THRESHOLD_METRICS
     ])
     async_add_entities([TuxdOnlineTimeoutNumber(hub)])
+    async_add_entities([TuxdLastSeenUpdateIntervalNumber(hub)])
 
 
 class TuxdNumber(TuxdEntity, NumberEntity):
@@ -120,6 +122,42 @@ class TuxdOnlineTimeoutNumber(NumberEntity):
             async_dispatcher_connect(
                 self.hass,
                 SIGNAL_ONLINE_TIMEOUT_CHANGED,
+                self.async_write_ha_state,
+            )
+        )
+
+
+class TuxdLastSeenUpdateIntervalNumber(NumberEntity):
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 1
+    _attr_native_max_value = 3600
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = "s"
+    _attr_icon = "mdi:timer-refresh-outline"
+
+    def __init__(self, hub):
+        self.hub = hub
+        self._attr_unique_id = f"{DOMAIN}_hub_last_seen_update_interval"
+        self._attr_name = "Last Seen Update Interval"
+
+    @property
+    def device_info(self):
+        return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+    @property
+    def native_value(self):
+        return self.hub.last_seen_update_interval
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.hub.set_last_seen_update_interval(value)
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_LAST_SEEN_UPDATE_INTERVAL_CHANGED,
                 self.async_write_ha_state,
             )
         )
