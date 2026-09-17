@@ -2,7 +2,13 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
-from .const import DOMAIN, HUB_IDENTIFIER, SIGNAL_THRESHOLDS_CHANGED, THRESHOLD_METRICS
+from .const import (
+    DOMAIN,
+    HUB_IDENTIFIER,
+    SIGNAL_ONLINE_TIMEOUT_CHANGED,
+    SIGNAL_THRESHOLDS_CHANGED,
+    THRESHOLD_METRICS,
+)
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "number"
@@ -15,6 +21,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities([
         TuxdThresholdNumber(hub, *row) for row in THRESHOLD_METRICS
     ])
+    async_add_entities([TuxdOnlineTimeoutNumber(hub)])
 
 
 class TuxdNumber(TuxdEntity, NumberEntity):
@@ -79,4 +86,40 @@ class TuxdThresholdNumber(NumberEntity):
     async def async_added_to_hass(self):
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_THRESHOLDS_CHANGED, self.async_write_ha_state)
+        )
+
+
+class TuxdOnlineTimeoutNumber(NumberEntity):
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 1
+    _attr_native_max_value = 1440
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = "min"
+    _attr_icon = "mdi:timer-outline"
+
+    def __init__(self, hub):
+        self.hub = hub
+        self._attr_unique_id = f"{DOMAIN}_hub_online_timeout"
+        self._attr_name = "Online Timeout"
+
+    @property
+    def device_info(self):
+        return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+    @property
+    def native_value(self):
+        return self.hub.online_timeout
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.hub.set_online_timeout(value)
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_ONLINE_TIMEOUT_CHANGED,
+                self.async_write_ha_state,
+            )
         )

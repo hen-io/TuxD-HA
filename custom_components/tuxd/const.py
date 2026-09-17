@@ -19,6 +19,9 @@ SIGNAL_LAST_SEEN_UPDATE = "tuxd_last_seen_{device_id}"
 SIGNAL_DEVICE_APPROVED = "tuxd_device_approved"
 SIGNAL_OFFLINE_UPDATE_URL_CHANGED = "tuxd_offline_update_url_changed"
 SIGNAL_THRESHOLDS_CHANGED = "tuxd_thresholds_changed"
+SIGNAL_ONLINE_TIMEOUT_CHANGED = "tuxd_online_timeout_changed"
+SIGNAL_LAST_SEEN_ENABLED_CHANGED = "tuxd_last_seen_enabled_changed"
+ONLINE_TIMEOUT_DEFAULT = 5
 
 THRESHOLD_METRICS = [
     ("cpu_load", "CPU Load", "mdi:cpu-64-bit", "%", 0, 100, 1, 90),

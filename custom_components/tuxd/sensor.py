@@ -10,6 +10,7 @@ from .const import (
     SIGNAL_DEVICE_APPROVED,
     SIGNAL_HUB_STATS_UPDATE,
     SIGNAL_LAST_SEEN_UPDATE,
+    SIGNAL_LAST_SEEN_ENABLED_CHANGED,
     SIGNAL_THRESHOLDS_CHANGED,
     THRESHOLD_METRICS,
 )
@@ -258,6 +259,10 @@ class TuxdLastSeenSensor(SensorEntity):
         return self.hub.device_last_seen.get(self._device_id)
 
     @property
+    def available(self):
+        return self.hub.last_seen_enabled
+
+    @property
     def device_info(self):
         return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
 
@@ -266,6 +271,13 @@ class TuxdLastSeenSensor(SensorEntity):
             async_dispatcher_connect(
                 self.hass,
                 SIGNAL_LAST_SEEN_UPDATE.format(device_id=self._device_id),
+                self.async_write_ha_state,
+            )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_LAST_SEEN_ENABLED_CHANGED,
                 self.async_write_ha_state,
             )
         )

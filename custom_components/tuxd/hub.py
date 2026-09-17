@@ -17,12 +17,15 @@ from .const import (
     DOMAIN,
     HUB_IDENTIFIER,
     ISSUE_PENDING_DEVICES,
+    ONLINE_TIMEOUT_DEFAULT,
     PLATFORMS,
     SIGNAL_DEVICE_APPROVED,
     SIGNAL_HUB_STATS_UPDATE,
     SIGNAL_LAST_SEEN_UPDATE,
+    SIGNAL_LAST_SEEN_ENABLED_CHANGED,
     SIGNAL_NEW_ENTITY,
     SIGNAL_OFFLINE_UPDATE_URL_CHANGED,
+    SIGNAL_ONLINE_TIMEOUT_CHANGED,
     SIGNAL_REMOVE_ENTITY,
     SIGNAL_STATE_UPDATE,
     SIGNAL_THRESHOLDS_CHANGED,
@@ -57,6 +60,8 @@ class TuxdHub:
         self.device_keys = {}
         self.pending_devices = {}
         self.thresholds = {}
+        self.online_timeout = ONLINE_TIMEOUT_DEFAULT
+        self.last_seen_enabled = True
 
         self.devices = {}
         self.device_last_seen = {}
@@ -74,10 +79,14 @@ class TuxdHub:
             self.device_keys = dict(stored.get("device_keys", {}))
             self.pending_devices = dict(stored.get("pending_devices", {}))
             self.thresholds = dict(stored.get("thresholds", {}))
+            self.online_timeout = max(1, min(1440, int(stored.get("online_timeout", ONLINE_TIMEOUT_DEFAULT))))
+            self.last_seen_enabled = bool(stored.get("last_seen_enabled", True))
         else:
             self.pairing_key = self.entry.data.get("pairing_key", "")
             self.device_keys = dict(self.entry.data.get("device_keys", {}))
             self.pending_devices = dict(self.entry.data.get("pending_devices", {}))
+            self.online_timeout = max(1, min(1440, int(self.entry.data.get("online_timeout", ONLINE_TIMEOUT_DEFAULT))))
+            self.last_seen_enabled = bool(self.entry.data.get("last_seen_enabled", True))
             await self._persist()
 
         self._sync_pending_issue()
@@ -217,7 +226,7 @@ class TuxdHub:
 
         self._notify_stats_changed()
 
-    _LAST_SEEN_DISPATCH_MIN_INTERVAL = 60.0
+    _LAST_SEEN_DISPATCH_MIN_INTERVAL = 300.0
 
     def _touch_last_seen(self, device_id):
         self.device_last_seen[device_id] = dt_util.utcnow()
@@ -239,6 +248,8 @@ class TuxdHub:
             self.device_keys = dict(stored.get("device_keys", self.device_keys))
             self.pending_devices = dict(stored.get("pending_devices", self.pending_devices))
             self.thresholds = dict(stored.get("thresholds", self.thresholds))
+            self.online_timeout = max(1, min(1440, int(stored.get("online_timeout", self.online_timeout))))
+            self.last_seen_enabled = bool(stored.get("last_seen_enabled", self.last_seen_enabled))
 
     async def _persist(self):
         data = {
@@ -246,6 +257,8 @@ class TuxdHub:
             "device_keys": self.device_keys,
             "pending_devices": self.pending_devices,
             "thresholds": self.thresholds,
+            "online_timeout": self.online_timeout,
+            "last_seen_enabled": self.last_seen_enabled,
         }
         await self._store.async_save(data)
 
@@ -554,3 +567,13 @@ class TuxdHub:
         self.thresholds[key] = value
         await self._persist()
         async_dispatcher_send(self.hass, SIGNAL_THRESHOLDS_CHANGED)
+
+    async def set_online_timeout(self, value):
+        self.online_timeout = max(1, min(1440, int(value)))
+        await self._persist()
+        async_dispatcher_send(self.hass, SIGNAL_ONLINE_TIMEOUT_CHANGED)
+
+    async def set_last_seen_enabled(self, enabled):
+        self.last_seen_enabled = bool(enabled)
+        await self._persist()
+        async_dispatcher_send(self.hass, SIGNAL_LAST_SEEN_ENABLED_CHANGED)
