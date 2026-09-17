@@ -4,6 +4,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import selector
 
 from .const import DOMAIN
 
@@ -66,6 +67,8 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         if hub.device_keys:
             menu_options.append("manage")
             menu_options.append("view_keys")
+        if hub.devices:
+            menu_options.append("config")
         menu_options.append("manual_key")
 
         return self.async_show_menu(
@@ -155,6 +158,46 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             vol.Optional("revoke", default=[]): cv.multi_select(choices),
         })
         return self.async_show_form(step_id="manage", data_schema=schema)
+
+    async def async_step_config(self, user_input=None, errors=None):
+        hub = self._hub()
+        device_id = getattr(self, "_config_device", None)
+        if not device_id or device_id not in hub.devices:
+            return await self.async_step_config_device()
+
+        if user_input is not None:
+            result = await hub.async_set_device_config(device_id, user_input.get("yaml", ""))
+            if not result.get("ok"):
+                return await self.async_step_config(errors={"base": result.get("error", "Could not save configuration")})
+            return self.async_create_entry(title="", data={})
+
+        result = await hub.async_get_device_config(device_id)
+        if not result.get("ok"):
+            return await self.async_step_config(errors={"base": result.get("error", "Could not read configuration")})
+        self._config_content = result.get("content", "")
+        return self.async_show_form(
+            step_id="config",
+            data_schema=vol.Schema({
+                vol.Required("yaml", default=self._config_content): selector.TextSelector(
+                    selector.TextSelectorConfig(multiline=True)
+                ),
+            }),
+            errors=errors or {},
+            description_placeholders={"device": device_id},
+        )
+
+    async def async_step_config_device(self, user_input=None):
+        hub = self._hub()
+        if user_input is not None:
+            self._config_device = user_input["device"]
+            return await self.async_step_config()
+        choices = {device_id: device_id for device_id in hub.devices}
+        if not choices:
+            return self.async_create_entry(title="", data={})
+        return self.async_show_form(
+            step_id="config_device",
+            data_schema=vol.Schema({vol.Required("device"): vol.In(choices)}),
+        )
 
 
     async def async_step_view_keys(self, user_input=None):

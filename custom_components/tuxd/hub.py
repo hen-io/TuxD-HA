@@ -73,6 +73,7 @@ class TuxdHub:
         self.key_to_unique_ids = {}
         self._device_generation = {}
         self._tty_sessions = {}
+        self._config_requests = {}
         self.offline_update_url = ""
 
     async def async_load(self):
@@ -338,6 +339,11 @@ class TuxdHub:
 
     def async_device_disconnected(self, device_id):
         self.devices.pop(device_id, None)
+        for request_id, request in list(self._config_requests.items()):
+            if request["device_id"] == device_id:
+                self._config_requests.pop(request_id, None)
+                if not request["future"].done():
+                    request["future"].set_result({"ok": False, "error": "Device disconnected"})
         _LOGGER.info("TuxD device disconnected: %s", device_id)
         for uid, entry in self.entities.items():
             if entry.get("device_id") == device_id:
@@ -423,6 +429,10 @@ class TuxdHub:
             self._handle_tty_data(device_id, msg)
         elif mtype == "tty_exit":
             self._handle_tty_exit(device_id, msg)
+        elif mtype == "config_response":
+            request = self._config_requests.get(msg.get("request_id"))
+            if request and request["device_id"] == device_id and not request["future"].done():
+                request["future"].set_result(msg)
         elif mtype == "ping":
             ws = self.devices.get(device_id, {}).get("ws")
             if ws is not None:
@@ -531,6 +541,29 @@ class TuxdHub:
             if _is_stats_relevant_object_id(entry.get("object_id") or ""):
                 self._notify_stats_changed()
 
+
+    async def async_get_device_config(self, device_id):
+        return await self._async_config_request(device_id, "get")
+
+    async def async_set_device_config(self, device_id, content):
+        return await self._async_config_request(device_id, "set", content)
+
+    async def _async_config_request(self, device_id, action, content=None):
+        if device_id not in self.devices or "ws" not in self.devices[device_id]:
+            return {"ok": False, "error": "Device is not connected"}
+        request_id = uuid.uuid4().hex
+        future = self.hass.loop.create_future()
+        self._config_requests[request_id] = {"device_id": device_id, "future": future}
+        payload = {"request_id": request_id, "action": action}
+        if content is not None:
+            payload["content"] = content
+        self.send_command(device_id, f"tuxd/{device_id}/config/{action}", json.dumps(payload))
+        try:
+            return await asyncio.wait_for(future, timeout=10)
+        except asyncio.TimeoutError:
+            return {"ok": False, "error": "Timed out waiting for the device"}
+        finally:
+            self._config_requests.pop(request_id, None)
 
     def send_command(self, device_id, key, payload):
         info = self.devices.get(device_id)

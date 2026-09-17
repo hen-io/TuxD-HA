@@ -24,6 +24,7 @@
           "pending": "Review new devices",
           "manage": "Manage approved devices",
           "view_keys": "View device keys",
+          "config": "Edit device configuration",
           "manual_key": "Set a specific key"
         }
       },
@@ -42,6 +43,20 @@
         "data": {
           "rotate": "Rotate key",
           "revoke": "Revoke"
+        }
+      },
+      "config_device": {
+        "title": "Choose TuxD device",
+        "description": "Select a connected direct-mode device to edit.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "config": {
+        "title": "Edit {device} configuration",
+        "description": "Edit the complete tuxd.conf YAML. Saving replaces the file atomically and restarts the device. Keep secrets protected.",
+        "data": {
+          "yaml": "tuxd.conf YAML"
         }
       },
       "view_keys": {

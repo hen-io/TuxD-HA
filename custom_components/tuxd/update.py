@@ -73,7 +73,7 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
     def entity_picture(self):
         if (self._entry.get("object_id") or "").startswith("docker_image_"):
             return None
-        return ENTITY_PICTURE_LOGO_BORDER
+        return ENTITY_PICTURE_LOGO
 
     async def async_install(self, version, backup: bool, **kwargs) -> None:
         command_topic = self._config.get("command_topic")
