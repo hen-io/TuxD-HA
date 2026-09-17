@@ -18,7 +18,7 @@ def _valid_device_id(device_id):
     return not any(ord(c) < 0x20 or ord(c) == 0x7F for c in device_id)
 
 
-_MAX_MSG_SIZE = 4096
+_MAX_MSG_SIZE = 16 * 1024
 
 
 class TuxdWebSocketView(HomeAssistantView):
