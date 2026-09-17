@@ -86,7 +86,8 @@ class TuxdEntity(Entity):
         device_id = self._entry.get("device_id")
         object_id = self._entry.get("object_id")
         if device_id and object_id:
-            return slugify(f"{device_id}_{object_id}")
+            return slugify(object_id)
+
         return None
 
     @property

@@ -2,7 +2,7 @@ import json
 
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 
-from .const import DOMAIN, ENTITY_PICTURE_LOGO_BORDER
+from .const import DOMAIN, ENTITY_PICTURE_LOGO
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "update"
