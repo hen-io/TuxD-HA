@@ -69,6 +69,8 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             menu_options.append("view_keys")
         if hub.devices:
             menu_options.append("config")
+        if hub.device_keys:
+            menu_options.append("restore_entity_ids")
         menu_options.append("manual_key")
 
         return self.async_show_menu(
@@ -197,6 +199,26 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="config_device",
             data_schema=vol.Schema({vol.Required("device"): vol.In(choices)}),
+        )
+
+
+    async def async_step_restore_entity_ids(self, user_input=None):
+        hub = self._hub()
+        if user_input is not None:
+            renamed, skipped = hub.restore_entity_ids()
+            return await self.async_step_restore_entity_ids_done(renamed=renamed, skipped=skipped)
+        return self.async_show_form(step_id="restore_entity_ids", data_schema=vol.Schema({}))
+
+    async def async_step_restore_entity_ids_done(self, user_input=None, renamed=None, skipped=None):
+        if renamed is not None:
+            self._restore_result = (renamed, skipped)
+        if user_input is not None:
+            return self.async_create_entry(title="", data={})
+        renamed, skipped = self._restore_result
+        return self.async_show_form(
+            step_id="restore_entity_ids_done",
+            data_schema=vol.Schema({}),
+            description_placeholders={"renamed": str(renamed), "skipped": str(skipped)},
         )
 
 

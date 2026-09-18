@@ -607,6 +607,39 @@ class TuxdHub:
     def check_host_updates_all_devices(self):
         self.hass.async_create_task(self._send_staggered("host_update/check"))
 
+    def restore_entity_ids(self):
+        from .entity import compute_suggested_object_id
+
+        ent_reg = er.async_get(self.hass)
+        entries = er.async_entries_for_config_entry(ent_reg, self.entry.entry_id)
+
+        renamed = 0
+        skipped = 0
+        for reg_entry in entries:
+            info = self.entities.get(reg_entry.unique_id)
+            if not info:
+                continue
+
+            suffix = compute_suggested_object_id(
+                info.get("config"), info.get("device_id"), info.get("object_id")
+            )
+            if not suffix:
+                continue
+
+            target_entity_id = f"{reg_entry.domain}.{suffix}"
+            if target_entity_id == reg_entry.entity_id:
+                continue
+
+            existing = ent_reg.async_get(target_entity_id)
+            if existing is not None and existing.unique_id != reg_entry.unique_id:
+                skipped += 1
+                continue
+
+            ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=target_entity_id)
+            renamed += 1
+
+        return renamed, skipped
+
     async def set_threshold(self, key, value):
         self.thresholds[key] = value
         await self._persist()

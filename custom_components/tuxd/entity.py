@@ -38,6 +38,24 @@ def async_setup_dynamic_platform(hass, entry, async_add_entities, domain_key, en
     )
 
 
+def compute_suggested_object_id(config, device_id, object_id):
+    config = config or {}
+    default_entity_id = config.get("default_entity_id")
+    if default_entity_id and "." in default_entity_id:
+        suffix = default_entity_id.split(".", 1)[1]
+        device = config.get("device") or {}
+        device_slug = slugify(device.get("name") or device_id or "")
+        prefix = f"{device_slug}_"
+        if device_slug and suffix.startswith(prefix):
+            return suffix[len(prefix):]
+        return suffix
+
+    if object_id:
+        return slugify(object_id)
+
+    return None
+
+
 _READ_ONLY_ENTITY_CLASSES = frozenset({"TuxdSensor", "TuxdBinarySensor", "TuxdUpdate"})
 
 
@@ -79,21 +97,9 @@ class TuxdEntity(Entity):
 
     @property
     def suggested_object_id(self):
-        default_entity_id = self._config.get("default_entity_id")
-        if default_entity_id and "." in default_entity_id:
-            object_id = default_entity_id.split(".", 1)[1]
-            device = self._config.get("device") or {}
-            device_slug = slugify(device.get("name") or self._entry.get("device_id") or "")
-            prefix = f"{device_slug}_"
-            if device_slug and object_id.startswith(prefix):
-                return object_id[len(prefix):]
-            return object_id
-
-        object_id = self._entry.get("object_id")
-        if object_id:
-            return slugify(object_id)
-
-        return None
+        return compute_suggested_object_id(
+            self._config, self._entry.get("device_id"), self._entry.get("object_id")
+        )
 
     @property
     def entity_category(self):

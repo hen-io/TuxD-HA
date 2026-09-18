@@ -25,6 +25,7 @@
           "manage": "Manage approved devices",
           "view_keys": "View device keys",
           "config": "Edit device configuration",
+          "restore_entity_ids": "Restore entity IDs",
           "manual_key": "Set a specific key"
         }
       },
@@ -64,6 +65,14 @@
       "issued": {
         "title": "New device keys",
         "description": "Paste each key into that device's own tuxd.conf under home-assistant.api_key. Shown only once:\n\n{keys}"
+      },
+      "restore_entity_ids": {
+        "title": "Restore entity IDs",
+        "description": "Recomputes every device's entity IDs using the current naming scheme (or a manual override set in tuxd.conf) and renames any that don't already match. This is disruptive on purpose - anything referencing an old entity ID (a dashboard, an automation, a template) will break the moment it changes. Only use this after a naming-scheme change, or to pick up a new manual entity_id override."
+      },
+      "restore_entity_ids_done": {
+        "title": "Entity IDs restored",
+        "description": "Renamed {renamed} entit(y/ies). Skipped {skipped} that would have collided with something else already using the target ID - those need a manual look."
       }
     },
     "error": {
