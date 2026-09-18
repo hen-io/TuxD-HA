@@ -8,6 +8,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType
 
+from .config_editor import async_setup_config_editor
 from .const import DOMAIN, HUB_IDENTIFIER, IMAGES_URL_PREFIX, ISSUE_PENDING_DEVICES, PLATFORMS
 from .hub import TuxdHub
 from .live_tty import async_setup_live_tty
@@ -17,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _VIEW_KEY = f"{DOMAIN}_ws_view"
 _LIVE_TTY_KEY = f"{DOMAIN}_live_tty"
+_CONFIG_EDITOR_KEY = f"{DOMAIN}_config_editor"
 _IMAGES_KEY = f"{DOMAIN}_images"
 
 
@@ -46,6 +48,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.data.get(_LIVE_TTY_KEY):
         async_setup_live_tty(hass)
         hass.data[_LIVE_TTY_KEY] = True
+
+    if not hass.data.get(_CONFIG_EDITOR_KEY):
+        async_setup_config_editor(hass)
+        hass.data[_CONFIG_EDITOR_KEY] = True
 
     if not hass.data.get(_IMAGES_KEY):
         images_dir = Path(__file__).parent / "images"
