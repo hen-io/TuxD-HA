@@ -206,7 +206,7 @@ class TuxdDevicesWithHostUpdatesSensor(TuxdHubStatSensor):
 
 class TuxdDevicesWithScriptUpdatesSensor(TuxdHubStatSensor):
     def __init__(self, hub):
-        super().__init__(hub, "devices_with_script_updates", "TuxD Devices With Script Updates", "mdi:script-text-outline")
+        super().__init__(hub, "devices_with_script_updates", "TuxD Devices With TuxD Agent Updates", "mdi:script-text-outline")
 
     @property
     def native_value(self):
