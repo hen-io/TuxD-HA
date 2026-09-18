@@ -608,6 +608,8 @@ class TuxdHub:
         self.hass.async_create_task(self._send_staggered("host_update/check"))
 
     def restore_entity_ids(self):
+        from homeassistant.core import valid_entity_id
+
         from .entity import compute_suggested_object_id
 
         ent_reg = er.async_get(self.hass)
@@ -630,13 +632,20 @@ class TuxdHub:
             if target_entity_id == reg_entry.entity_id:
                 continue
 
+            if not valid_entity_id(target_entity_id):
+                skipped += 1
+                continue
+
             existing = ent_reg.async_get(target_entity_id)
             if existing is not None and existing.unique_id != reg_entry.unique_id:
                 skipped += 1
                 continue
 
-            ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=target_entity_id)
-            renamed += 1
+            try:
+                ent_reg.async_update_entity(reg_entry.entity_id, new_entity_id=target_entity_id)
+                renamed += 1
+            except ValueError:
+                skipped += 1
 
         return renamed, skipped
 
