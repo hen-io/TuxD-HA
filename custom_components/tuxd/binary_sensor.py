@@ -8,7 +8,7 @@ from .const import (
     HUB_IDENTIFIER,
     SIGNAL_DEVICE_APPROVED,
     SIGNAL_LAST_SEEN_UPDATE,
-    SIGNAL_LAST_SEEN_ENABLED_CHANGED,
+    SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED,
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
 )
 from .entity import TuxdEntity, async_setup_dynamic_platform
@@ -71,7 +71,7 @@ class TuxdOnlineBinarySensor(BinarySensorEntity):
 
     @property
     def available(self):
-        return self.hub.last_seen_enabled
+        return self.hub.online_sensors_enabled
 
     @property
     def device_info(self):
@@ -98,7 +98,7 @@ class TuxdOnlineBinarySensor(BinarySensorEntity):
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
-                SIGNAL_LAST_SEEN_ENABLED_CHANGED,
+                SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED,
                 self.async_write_ha_state,
             )
         )

@@ -27,6 +27,7 @@ from .const import (
     SIGNAL_LAST_SEEN_ENABLED_CHANGED,
     SIGNAL_NEW_ENTITY,
     SIGNAL_OFFLINE_UPDATE_URL_CHANGED,
+    SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED,
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
     SIGNAL_REMOVE_ENTITY,
     SIGNAL_STATE_UPDATE,
@@ -64,6 +65,7 @@ class TuxdHub:
         self.thresholds = {}
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
         self.last_seen_enabled = True
+        self.online_sensors_enabled = True
         self.last_seen_update_interval = LAST_SEEN_UPDATE_INTERVAL_DEFAULT
 
         self.devices = {}
@@ -85,6 +87,7 @@ class TuxdHub:
             self.thresholds = dict(stored.get("thresholds", {}))
             self.online_timeout = max(1, min(1440, int(stored.get("online_timeout", ONLINE_TIMEOUT_DEFAULT))))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", True))
+            self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", True))
             self.last_seen_update_interval = max(1, min(3600, int(stored.get("last_seen_update_interval", LAST_SEEN_UPDATE_INTERVAL_DEFAULT))))
         else:
             self.pairing_key = self.entry.data.get("pairing_key", "")
@@ -92,6 +95,7 @@ class TuxdHub:
             self.pending_devices = dict(self.entry.data.get("pending_devices", {}))
             self.online_timeout = max(1, min(1440, int(self.entry.data.get("online_timeout", ONLINE_TIMEOUT_DEFAULT))))
             self.last_seen_enabled = bool(self.entry.data.get("last_seen_enabled", True))
+            self.online_sensors_enabled = bool(self.entry.data.get("online_sensors_enabled", True))
             self.last_seen_update_interval = max(1, min(3600, int(self.entry.data.get("last_seen_update_interval", LAST_SEEN_UPDATE_INTERVAL_DEFAULT))))
             await self._persist()
 
@@ -254,6 +258,7 @@ class TuxdHub:
             self.thresholds = dict(stored.get("thresholds", self.thresholds))
             self.online_timeout = max(1, min(1440, int(stored.get("online_timeout", self.online_timeout))))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", self.last_seen_enabled))
+            self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", self.online_sensors_enabled))
             self.last_seen_update_interval = max(1, min(3600, int(stored.get("last_seen_update_interval", self.last_seen_update_interval))))
 
     async def _persist(self):
@@ -264,6 +269,7 @@ class TuxdHub:
             "thresholds": self.thresholds,
             "online_timeout": self.online_timeout,
             "last_seen_enabled": self.last_seen_enabled,
+            "online_sensors_enabled": self.online_sensors_enabled,
             "last_seen_update_interval": self.last_seen_update_interval,
         }
         await self._store.async_save(data)
@@ -620,3 +626,8 @@ class TuxdHub:
         self.last_seen_enabled = bool(enabled)
         await self._persist()
         async_dispatcher_send(self.hass, SIGNAL_LAST_SEEN_ENABLED_CHANGED)
+
+    async def set_online_sensors_enabled(self, enabled):
+        self.online_sensors_enabled = bool(enabled)
+        await self._persist()
+        async_dispatcher_send(self.hass, SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED)
