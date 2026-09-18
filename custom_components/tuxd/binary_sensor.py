@@ -1,4 +1,6 @@
 from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.core import callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.util import dt as dt_util
@@ -22,17 +24,40 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     added = set()
 
+    @callback
     def _add_online(device_id):
+        if not hub.online_sensors_enabled:
+            return
         if device_id in added:
             return
         added.add(device_id)
         async_add_entities([TuxdOnlineBinarySensor(hub, device_id)])
+
+    @callback
+    def _remove_online(device_id):
+        added.discard(device_id)
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(_DOMAIN_KEY, DOMAIN, f"{DOMAIN}_{device_id}_online")
+        if entity_id:
+            ent_reg.async_remove(entity_id)
+
+    @callback
+    def _on_online_sensors_enabled_changed():
+        if hub.online_sensors_enabled:
+            for device_id in list(hub.device_keys):
+                _add_online(device_id)
+        else:
+            for device_id in list(added):
+                _remove_online(device_id)
 
     for device_id in list(hub.device_keys):
         _add_online(device_id)
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_DEVICE_APPROVED, _add_online)
+    )
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED, _on_online_sensors_enabled_changed)
     )
 
 

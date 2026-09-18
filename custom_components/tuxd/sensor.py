@@ -1,5 +1,6 @@
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.core import callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.util import dt as dt_util
@@ -40,16 +41,38 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     @callback
     def _add_last_seen(device_id):
+        if not hub.last_seen_enabled:
+            return
         if device_id in added:
             return
         added.add(device_id)
         async_add_entities([TuxdLastSeenSensor(hub, device_id)])
+
+    @callback
+    def _remove_last_seen(device_id):
+        added.discard(device_id)
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(_DOMAIN_KEY, DOMAIN, f"{DOMAIN}_{device_id}_last_seen")
+        if entity_id:
+            ent_reg.async_remove(entity_id)
+
+    @callback
+    def _on_last_seen_enabled_changed():
+        if hub.last_seen_enabled:
+            for device_id in list(hub.device_keys.keys()):
+                _add_last_seen(device_id)
+        else:
+            for device_id in list(added):
+                _remove_last_seen(device_id)
 
     for device_id in list(hub.device_keys.keys()):
         _add_last_seen(device_id)
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_DEVICE_APPROVED, _add_last_seen)
+    )
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_LAST_SEEN_ENABLED_CHANGED, _on_last_seen_enabled_changed)
     )
 
 
