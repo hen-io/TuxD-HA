@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import secrets
 import time
 import uuid
@@ -554,9 +555,20 @@ class TuxdHub:
     async def async_set_device_config(self, device_id, content):
         return await self._async_config_request(device_id, "set", content)
 
+    def _resolve_device_id(self, device_id):
+        if device_id in self.devices:
+            return device_id
+        normalized = re.sub(r"[-_]+", "_", str(device_id or "")).lower()
+        for real_id in self.devices:
+            if re.sub(r"[-_]+", "_", real_id).lower() == normalized:
+                return real_id
+        return None
+
     async def _async_config_request(self, device_id, action, content=None):
-        if device_id not in self.devices or "ws" not in self.devices[device_id]:
+        resolved = self._resolve_device_id(device_id)
+        if resolved is None or "ws" not in self.devices[resolved]:
             return {"ok": False, "error": "Device is not connected"}
+        device_id = resolved
         request_id = uuid.uuid4().hex
         future = self.hass.loop.create_future()
         self._config_requests[request_id] = {"device_id": device_id, "future": future}
