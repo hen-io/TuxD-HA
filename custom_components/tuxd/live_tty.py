@@ -17,6 +17,7 @@ def _hub(hass: HomeAssistant):
     vol.Required("device_id"): str,
     vol.Optional("cols", default=80): int,
     vol.Optional("rows", default=24): int,
+    vol.Optional("password"): str,
 })
 @callback
 def _open(hass, connection, msg):
@@ -24,7 +25,9 @@ def _open(hass, connection, msg):
     if hub is None:
         connection.send_error(msg["id"], "not_found", "TuxD is not set up")
         return
-    session_id = hub.tty_open(msg["device_id"], connection, msg["id"], msg["cols"], msg["rows"])
+    session_id = hub.tty_open(
+        msg["device_id"], connection, msg["id"], msg["cols"], msg["rows"], msg.get("password")
+    )
     if session_id is None:
         connection.send_error(msg["id"], "not_found", f"{msg['device_id']} is not connected")
         return

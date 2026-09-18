@@ -365,7 +365,7 @@ class TuxdHub:
                 )
 
 
-    def tty_open(self, device_id, connection, msg_id, cols, rows):
+    def tty_open(self, device_id, connection, msg_id, cols, rows, password=None):
         info = self.devices.get(device_id)
         if not info or "ws" not in info:
             return None
@@ -374,9 +374,10 @@ class TuxdHub:
             "device_id": device_id, "connection": connection, "msg_id": msg_id,
         }
         ws = info["ws"]
-        asyncio.create_task(ws.send_str(json.dumps({
-            "type": "tty_open", "session": session_id, "cols": cols, "rows": rows,
-        })))
+        payload = {"type": "tty_open", "session": session_id, "cols": cols, "rows": rows}
+        if password is not None:
+            payload["password"] = password
+        asyncio.create_task(ws.send_str(json.dumps(payload)))
         return session_id
 
     def tty_input(self, session_id, data):
@@ -412,8 +413,11 @@ class TuxdHub:
         info = self._tty_sessions.pop(session_id, None)
         if not info or info["device_id"] != device_id:
             return
+        event = {"type": "tty_exit", "code": msg.get("code", -1)}
+        if msg.get("reason"):
+            event["reason"] = msg["reason"]
         info["connection"].send_message(
-            websocket_api.event_message(info["msg_id"], {"type": "tty_exit", "code": msg.get("code", -1)})
+            websocket_api.event_message(info["msg_id"], event)
         )
 
 
