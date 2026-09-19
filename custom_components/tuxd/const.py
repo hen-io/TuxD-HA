@@ -21,7 +21,7 @@ SIGNAL_THRESHOLDS_CHANGED = "tuxd_thresholds_changed"
 SIGNAL_ONLINE_TIMEOUT_CHANGED = "tuxd_online_timeout_changed"
 SIGNAL_LAST_SEEN_ENABLED_CHANGED = "tuxd_last_seen_enabled_changed"
 SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED = "tuxd_online_sensors_enabled_changed"
-ONLINE_TIMEOUT_DEFAULT = 5
+ONLINE_TIMEOUT_DEFAULT = 300
 LAST_SEEN_UPDATE_INTERVAL_DEFAULT = 300
 SIGNAL_LAST_SEEN_UPDATE_INTERVAL_CHANGED = "tuxd_last_seen_update_interval_changed"
 

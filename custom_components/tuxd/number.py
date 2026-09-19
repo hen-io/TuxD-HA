@@ -95,10 +95,10 @@ class TuxdOnlineTimeoutNumber(NumberEntity):
     _attr_should_poll = False
     _attr_has_entity_name = False
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_native_min_value = 1
-    _attr_native_max_value = 1440
+    _attr_native_min_value = 10
+    _attr_native_max_value = 86400
     _attr_native_step = 1
-    _attr_native_unit_of_measurement = "min"
+    _attr_native_unit_of_measurement = "s"
     _attr_icon = "mdi:timer-outline"
 
     def __init__(self, hub):

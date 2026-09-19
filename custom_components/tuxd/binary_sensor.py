@@ -92,7 +92,7 @@ class TuxdOnlineBinarySensor(BinarySensorEntity):
         last_seen = self.hub.device_last_seen.get(self._device_id)
         if last_seen is None:
             return False
-        return (dt_util.utcnow() - last_seen).total_seconds() <= self.hub.online_timeout * 60
+        return (dt_util.utcnow() - last_seen).total_seconds() <= self.hub.online_timeout
 
     @property
     def available(self):
