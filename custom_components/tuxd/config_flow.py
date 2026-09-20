@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 
 import voluptuous as vol
@@ -69,6 +70,8 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             menu_options.append("view_keys")
         if hub.devices:
             menu_options.append("config")
+        if hub.terminal_enabled_devices():
+            menu_options.append("run_command")
         if hub.device_keys:
             menu_options.append("restore_entity_ids")
         menu_options.append("manual_key")
@@ -199,6 +202,55 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="config_device",
             data_schema=vol.Schema({vol.Required("device"): vol.In(choices)}),
+        )
+
+
+    async def async_step_run_command(self, user_input=None, errors=None):
+        hub = self._hub()
+        devices = hub.terminal_enabled_devices()
+        if not devices:
+            return self.async_create_entry(title="", data={})
+
+        if user_input is not None:
+            targets = user_input.get("devices") or []
+            cmd = (user_input.get("command") or "").strip()
+            password = (user_input.get("password") or "").strip()
+            if not targets:
+                return await self.async_step_run_command(errors={"devices": "no_devices_selected"})
+            if not cmd:
+                return await self.async_step_run_command(errors={"command": "command_required"})
+            results = await asyncio.gather(*[
+                hub.run_terminal_command(device_id, cmd, password or None) for device_id in targets
+            ])
+            return await self.async_step_run_command_result(
+                results=dict(zip(targets, results))
+            )
+
+        choices = {device_id: device_id for device_id in devices}
+        schema = vol.Schema({
+            vol.Required("devices", default=devices): cv.multi_select(choices),
+            vol.Required("command"): str,
+            vol.Optional("password", default=""): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            ),
+        })
+        return self.async_show_form(step_id="run_command", data_schema=schema, errors=errors or {})
+
+    async def async_step_run_command_result(self, user_input=None, results=None):
+        if results is not None:
+            self._run_command_results = results
+        if user_input is not None:
+            return self.async_create_entry(title="", data={})
+
+        blocks = []
+        for device_id, result in self._run_command_results.items():
+            status = "OK" if result["ok"] else f"FAILED - {result['error']}"
+            output = result["output"].strip() or "(no output)"
+            blocks.append(f"**{device_id}** - {status}\n```\n{output}\n```")
+        return self.async_show_form(
+            step_id="run_command_result",
+            data_schema=vol.Schema({}),
+            description_placeholders={"results": "\n\n".join(blocks)},
         )
 
 

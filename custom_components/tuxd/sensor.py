@@ -33,6 +33,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdDevicesWithHostUpdatesSensor(hub),
         TuxdDevicesWithScriptUpdatesSensor(hub),
         TuxdDevicesWithSmartErrorsSensor(hub),
+        TuxdDevicesWithDockerErrorsSensor(hub),
         TuxdDevicesByVersionSensor(hub),
         *[TuxdVmsOverThresholdSensor(hub, *row) for row in THRESHOLD_METRICS],
     ])
@@ -152,9 +153,16 @@ class TuxdOfflineDevicesSensor(TuxdHubStatSensor):
     def __init__(self, hub):
         super().__init__(hub, "offline_devices", "TuxD Offline Devices", "mdi:server-network-off")
 
+    def _offline_ids(self):
+        return sorted(set(self.hub.device_keys) - set(self.hub.devices))
+
     @property
     def native_value(self):
-        return max(0, len(self.hub.device_keys) - len(self.hub.devices))
+        return len(self._offline_ids())
+
+    @property
+    def extra_state_attributes(self):
+        return {"devices": self._offline_ids()}
 
 
 class TuxdDevicesByVersionSensor(TuxdHubStatSensor):
@@ -184,44 +192,64 @@ class TuxdDevicesWithErrorsSensor(TuxdHubStatSensor):
     def __init__(self, hub):
         super().__init__(hub, "devices_with_errors", "TuxD Devices With Errors", "mdi:alert-circle-outline")
 
+    def _device_ids(self):
+        return sorted({
+            e.get("device_id") for e in self.hub.entities.values()
+            if e.get("object_id") == "system_error" and e.get("state") == "ON"
+        })
+
     @property
     def native_value(self):
-        return sum(
-            1 for e in self.hub.entities.values()
-            if e.get("object_id") == "system_error" and e.get("state") == "ON"
-        )
+        return len(self._device_ids())
+
+    @property
+    def extra_state_attributes(self):
+        return {"devices": self._device_ids()}
 
 
 class TuxdDevicesWithHostUpdatesSensor(TuxdHubStatSensor):
     def __init__(self, hub):
         super().__init__(hub, "devices_with_host_updates", "TuxD Devices With Host Updates", "mdi:package-up")
 
+    def _device_ids(self):
+        return sorted({
+            e.get("device_id") for uid, e in self.hub.entities.items()
+            if e.get("object_id") == "host_update" and _has_update(self.hub, uid)
+        })
+
     @property
     def native_value(self):
-        return sum(
-            1 for uid, e in self.hub.entities.items()
-            if e.get("object_id") == "host_update" and _has_update(self.hub, uid)
-        )
+        return len(self._device_ids())
+
+    @property
+    def extra_state_attributes(self):
+        return {"devices": self._device_ids()}
 
 
 class TuxdDevicesWithScriptUpdatesSensor(TuxdHubStatSensor):
     def __init__(self, hub):
         super().__init__(hub, "devices_with_script_updates", "TuxD Devices With TuxD Agent Updates", "mdi:script-text-outline")
 
+    def _device_ids(self):
+        return sorted({
+            e.get("device_id") for uid, e in self.hub.entities.items()
+            if e.get("object_id") == "self_update" and _has_update(self.hub, uid)
+        })
+
     @property
     def native_value(self):
-        return sum(
-            1 for uid, e in self.hub.entities.items()
-            if e.get("object_id") == "self_update" and _has_update(self.hub, uid)
-        )
+        return len(self._device_ids())
+
+    @property
+    def extra_state_attributes(self):
+        return {"devices": self._device_ids()}
 
 
 class TuxdDevicesWithSmartErrorsSensor(TuxdHubStatSensor):
     def __init__(self, hub):
         super().__init__(hub, "devices_with_smart_errors", "TuxD Devices With SMART Errors", "mdi:harddisk")
 
-    @property
-    def native_value(self):
+    def _device_ids(self):
         devices = set()
         for e in self.hub.entities.values():
             object_id = e.get("object_id") or ""
@@ -232,7 +260,34 @@ class TuxdDevicesWithSmartErrorsSensor(TuxdHubStatSensor):
                     devices.add(e.get("device_id"))
             except (TypeError, ValueError):
                 continue
-        return len(devices)
+        return sorted(devices)
+
+    @property
+    def native_value(self):
+        return len(self._device_ids())
+
+    @property
+    def extra_state_attributes(self):
+        return {"devices": self._device_ids()}
+
+
+class TuxdDevicesWithDockerErrorsSensor(TuxdHubStatSensor):
+    def __init__(self, hub):
+        super().__init__(hub, "devices_with_docker_errors", "TuxD Devices With Docker Errors", "mdi:docker")
+
+    def _device_ids(self):
+        return sorted({
+            e.get("device_id") for e in self.hub.entities.values()
+            if e.get("object_id") == "docker_containers_error" and e.get("state") == "ON"
+        })
+
+    @property
+    def native_value(self):
+        return len(self._device_ids())
+
+    @property
+    def extra_state_attributes(self):
+        return {"devices": self._device_ids()}
 
 
 class TuxdVmsOverThresholdSensor(TuxdHubStatSensor):
@@ -242,19 +297,28 @@ class TuxdVmsOverThresholdSensor(TuxdHubStatSensor):
         self._object_id = object_id
         self._default = default
 
-    @property
-    def native_value(self):
+    def _over_values(self):
         threshold = self.hub.thresholds.get(self._object_id, self._default)
-        count = 0
+        values = {}
         for e in self.hub.entities.values():
             if e.get("object_id") != self._object_id:
                 continue
             try:
-                if float(e.get("state")) > threshold:
-                    count += 1
+                value = float(e.get("state"))
             except (TypeError, ValueError):
                 continue
-        return count
+            if value > threshold:
+                values[e.get("device_id")] = value
+        return values
+
+    @property
+    def native_value(self):
+        return len(self._over_values())
+
+    @property
+    def extra_state_attributes(self):
+        values = self._over_values()
+        return {"devices": sorted(values.keys()), "values": values}
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

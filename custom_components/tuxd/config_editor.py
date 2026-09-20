@@ -12,6 +12,7 @@ def _hub(hass: HomeAssistant):
     return next(iter(hubs.values()), None)
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"): "tuxd/config/get",
     vol.Required("device_id"): str,
@@ -26,6 +27,7 @@ async def _get(hass, connection, msg):
     connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"): "tuxd/config/set",
     vol.Required("device_id"): str,

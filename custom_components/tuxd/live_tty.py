@@ -12,6 +12,7 @@ def _hub(hass: HomeAssistant):
     return next(iter(hubs.values()), None)
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"): "tuxd/live_tty/open",
     vol.Required("device_id"): str,
@@ -43,6 +44,7 @@ def _open(hass, connection, msg):
     )
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"): "tuxd/live_tty/input",
     vol.Required("session"): str,
@@ -56,6 +58,7 @@ def _input(hass, connection, msg):
     connection.send_result(msg["id"])
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"): "tuxd/live_tty/resize",
     vol.Required("session"): str,
@@ -70,6 +73,7 @@ def _resize(hass, connection, msg):
     connection.send_result(msg["id"])
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"): "tuxd/live_tty/close",
     vol.Required("session"): str,

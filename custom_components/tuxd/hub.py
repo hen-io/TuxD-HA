@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -43,10 +44,40 @@ _LOGGER = logging.getLogger(__name__)
 _MAX_PENDING_DEVICES = 50
 
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\r")
+
+
+def _strip_ansi(text):
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
+class _HeadlessTtyCollector:
+
+    def __init__(self):
+        self.output = []
+        self.exit_event = asyncio.Event()
+        self.exit_code = None
+        self.exit_reason = None
+
+    def send_message(self, message):
+        event = message.get("event") or {}
+        etype = event.get("type")
+        if etype == "tty_data":
+            try:
+                raw = base64.b64decode(event.get("data") or "")
+            except Exception:
+                raw = b""
+            self.output.append(raw.decode("utf-8", errors="replace"))
+        elif etype == "tty_exit":
+            self.exit_code = event.get("code")
+            self.exit_reason = event.get("reason")
+            self.exit_event.set()
+
+
 def _is_stats_relevant_object_id(object_id):
     object_id = object_id or ""
     return (
-        object_id in ("system_error", "host_update", "self_update")
+        object_id in ("system_error", "host_update", "self_update", "docker_containers_error")
         or object_id in _THRESHOLD_OBJECT_IDS
         or (object_id.startswith("disk_") and object_id.endswith("_smart_errors"))
     )
@@ -429,6 +460,40 @@ class TuxdHub:
         info["connection"].send_message(
             websocket_api.event_message(info["msg_id"], event)
         )
+
+    async def run_terminal_command(self, device_id, cmd, password=None, wait_seconds=6.0):
+        if device_id not in self.devices or "ws" not in self.devices[device_id]:
+            return {"ok": False, "output": "", "error": "Device is not connected"}
+        collector = _HeadlessTtyCollector()
+        session_id = self.tty_open(device_id, collector, f"cfgflow-{device_id}", 200, 50, password or None)
+        if session_id is None:
+            return {"ok": False, "output": "", "error": "Device is not connected"}
+        exited_early = False
+        try:
+            data_b64 = base64.b64encode((cmd + "\r").encode("utf-8")).decode("ascii")
+            self.tty_input(session_id, data_b64)
+            try:
+                await asyncio.wait_for(collector.exit_event.wait(), timeout=wait_seconds)
+                exited_early = True
+            except asyncio.TimeoutError:
+                pass
+        finally:
+            self.tty_close(session_id)
+        output = _strip_ansi("".join(collector.output))
+        if collector.exit_code == -2:
+            return {"ok": False, "output": output, "error": collector.exit_reason or "Password required"}
+        if exited_early and not output.strip():
+            return {"ok": False, "output": output, "error": collector.exit_reason or "Terminal session ended unexpectedly (busy or disabled)"}
+        return {"ok": True, "output": output, "error": None}
+
+    def terminal_enabled_devices(self):
+        return sorted({
+            entry.get("device_id")
+            for entry in self.entities.values()
+            if entry.get("domain") == "text"
+            and entry.get("object_id") == "terminal_input"
+            and entry.get("device_id") in self.devices
+        })
 
 
     async def async_handle_message(self, device_id, raw):

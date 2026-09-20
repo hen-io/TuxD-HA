@@ -25,6 +25,7 @@
           "manage": "Manage approved devices",
           "view_keys": "View device keys",
           "config": "Edit device configuration",
+          "run_command": "Run terminal command",
           "restore_entity_ids": "Restore entity IDs",
           "manual_key": "Set a specific key"
         }
@@ -64,6 +65,19 @@
         "title": "Current device keys",
         "description": "{keys}"
       },
+      "run_command": {
+        "title": "Run terminal command",
+        "description": "Runs one command on every terminal-enabled device selected below (all are checked by default - uncheck any you want to skip). This opens a real terminal session on each device the same way the terminal card does, types the command, and collects a few seconds of output - not meant for a long-running foreground process. If a device has a password set under tuxd.conf's [device] section, enter it below; devices without one ignore it.",
+        "data": {
+          "devices": "Devices",
+          "command": "Command",
+          "password": "Password (if required)"
+        }
+      },
+      "run_command_result": {
+        "title": "Command results",
+        "description": "{results}"
+      },
       "manual_key": {
         "title": "Set a specific key",
         "description": "Assigns a device a key you choose yourself, instead of a randomly generated one - e.g. one already deployed to it out-of-band. Works for a pending device (approves it with this key) or an already-approved one (replaces its existing key).",
@@ -91,7 +105,9 @@
     },
     "error": {
       "key_required": "Pick a device AND enter a key - both are needed to set one manually.",
-      "key_collision": "That key is already used by a different device - each device needs its own unique key."
+      "key_collision": "That key is already used by a different device - each device needs its own unique key.",
+      "no_devices_selected": "Select at least one device to run the command on.",
+      "command_required": "Enter a command to run."
     }
   },
   "issues": {
