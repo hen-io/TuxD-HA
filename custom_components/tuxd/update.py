@@ -31,7 +31,15 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
         features = UpdateEntityFeature.PROGRESS
         if self._config.get("command_topic"):
             features |= UpdateEntityFeature.INSTALL
+        if self._full_summary:
+            features |= UpdateEntityFeature.RELEASE_NOTES
         return features
+
+    @property
+    def _full_summary(self):
+        data = self._state_json
+        summary = data.get("release_summary") if data is not None else None
+        return summary if isinstance(summary, str) and summary.strip() else None
 
     @property
     def installed_version(self):
@@ -55,10 +63,29 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
             return bool(data.get("in_progress"))
         return False
 
+    _SUMMARY_LIMIT = 255
+
     @property
     def release_summary(self):
-        data = self._state_json
-        return data.get("release_summary") if data is not None else None
+        full = self._full_summary
+        if full is None:
+            return None
+        lines = [line for line in full.splitlines() if line.strip()]
+        if len("\n".join(lines)) <= self._SUMMARY_LIMIT:
+            return "\n".join(lines)
+        kept, used = [], 0
+        for i, line in enumerate(lines):
+            tail = f"\n+{len(lines) - i} more (see release notes)"
+            if used + len(line) + (1 if kept else 0) + len(tail) > self._SUMMARY_LIMIT:
+                break
+            used += len(line) + (1 if kept else 0)
+            kept.append(line)
+        if not kept:
+            return lines[0][: self._SUMMARY_LIMIT - 1] + "…"
+        return "\n".join(kept) + f"\n+{len(lines) - len(kept)} more (see release notes)"
+
+    async def async_release_notes(self):
+        return self._full_summary
 
     @property
     def release_url(self):
