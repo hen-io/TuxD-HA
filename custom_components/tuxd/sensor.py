@@ -34,6 +34,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdDevicesWithScriptUpdatesSensor(hub),
         TuxdDevicesWithSmartErrorsSensor(hub),
         TuxdDevicesWithDockerErrorsSensor(hub),
+        TuxdDevicesWithUnhealthyStacksSensor(hub),
         TuxdDevicesByVersionSensor(hub),
         *[TuxdVmsOverThresholdSensor(hub, *row) for row in THRESHOLD_METRICS],
     ])
@@ -288,6 +289,44 @@ class TuxdDevicesWithDockerErrorsSensor(TuxdHubStatSensor):
     @property
     def extra_state_attributes(self):
         return {"devices": self._device_ids()}
+
+
+class TuxdDevicesWithUnhealthyStacksSensor(TuxdHubStatSensor):
+
+    _NOT_A_PROBLEM = ("healthy", "unknown", "unavailable", "")
+
+    def __init__(self, hub):
+        super().__init__(hub, "devices_with_unhealthy_stacks", "TuxD Devices With Unhealthy Stacks", "mdi:ferry")
+
+    @staticmethod
+    def _is_stack_health(e):
+        object_id = e.get("object_id") or ""
+        return object_id.startswith("tugboat_") and object_id.endswith("_health")
+
+    def _scan(self):
+        stacks = {}
+        total = 0
+        for e in self.hub.entities.values():
+            if not self._is_stack_health(e):
+                continue
+            total += 1
+            health = str(e.get("state") or "").strip().lower()
+            if health in self._NOT_A_PROBLEM:
+                continue
+            name = str((e.get("config") or {}).get("name") or e.get("object_id"))
+            if name.endswith(" Health"):
+                name = name[: -len(" Health")]
+            stacks.setdefault(e.get("device_id"), {})[name] = health
+        return stacks, total
+
+    @property
+    def native_value(self):
+        return len(self._scan()[0])
+
+    @property
+    def extra_state_attributes(self):
+        stacks, total = self._scan()
+        return {"devices": sorted(stacks), "stacks": stacks, "stacks_total": total}
 
 
 class TuxdVmsOverThresholdSensor(TuxdHubStatSensor):

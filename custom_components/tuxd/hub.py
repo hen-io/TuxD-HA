@@ -80,6 +80,7 @@ def _is_stats_relevant_object_id(object_id):
         object_id in ("system_error", "host_update", "self_update", "docker_containers_error")
         or object_id in _THRESHOLD_OBJECT_IDS
         or (object_id.startswith("disk_") and object_id.endswith("_smart_errors"))
+        or (object_id.startswith("tugboat_") and object_id.endswith("_health"))
     )
 
 
