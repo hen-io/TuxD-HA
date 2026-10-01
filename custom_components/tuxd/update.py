@@ -70,19 +70,30 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
         full = self._full_summary
         if full is None:
             return None
-        lines = [line for line in full.splitlines() if line.strip()]
-        if len("\n".join(lines)) <= self._SUMMARY_LIMIT:
-            return "\n".join(lines)
+        body, sep, footer = full.rpartition("\n\n")
+        footer = " ".join(footer.split()) if sep else ""
+        if not sep:
+            body = full
+        if len(footer) > self._SUMMARY_LIMIT // 2:
+            footer = footer[: self._SUMMARY_LIMIT // 2 - 1] + "…"
+        suffix = f"\n\n{footer}" if footer else ""
+        limit = self._SUMMARY_LIMIT - len(suffix)
+
+        lines = [line for line in body.splitlines() if line.strip()]
+        if not lines:
+            return footer or None
+        if len("\n".join(lines)) <= limit:
+            return "\n".join(lines) + suffix
         kept, used = [], 0
         for i, line in enumerate(lines):
             tail = f"\n+{len(lines) - i} more (see release notes)"
-            if used + len(line) + (1 if kept else 0) + len(tail) > self._SUMMARY_LIMIT:
+            if used + len(line) + (1 if kept else 0) + len(tail) > limit:
                 break
             used += len(line) + (1 if kept else 0)
             kept.append(line)
         if not kept:
-            return lines[0][: self._SUMMARY_LIMIT - 1] + "…"
-        return "\n".join(kept) + f"\n+{len(lines) - len(kept)} more (see release notes)"
+            return lines[0][: limit - 1] + "…" + suffix
+        return "\n".join(kept) + f"\n+{len(lines) - len(kept)} more (see release notes)" + suffix
 
     async def async_release_notes(self):
         return self._full_summary
