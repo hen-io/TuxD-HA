@@ -314,8 +314,10 @@ class TuxdDevicesWithUnhealthyStacksSensor(TuxdHubStatSensor):
             if health in self._NOT_A_PROBLEM:
                 continue
             name = str((e.get("config") or {}).get("name") or e.get("object_id"))
-            if name.endswith(" Health"):
-                name = name[: -len(" Health")]
+            for suffix in (" Health", " Helse"):
+                if name.endswith(suffix):
+                    name = name[: -len(suffix)]
+                    break
             stacks.setdefault(e.get("device_id"), {})[name] = health
         return stacks, total
 
