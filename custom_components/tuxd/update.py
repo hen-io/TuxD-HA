@@ -98,7 +98,7 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
 
     @property
     def entity_picture(self):
-        if (self._entry.get("object_id") or "").startswith("docker_image_"):
+        if (self._entry.get("object_id") or "").startswith(("docker_image_", "tugboat_image_")):
             return None
         return ENTITY_PICTURE_LOGO
 
