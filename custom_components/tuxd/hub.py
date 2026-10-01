@@ -579,12 +579,35 @@ class TuxdHub:
         if attrs_topic:
             self.key_to_unique_ids.setdefault(attrs_topic, set()).add(unique_id)
 
+        self._migrate_enabled_entity_id(domain, object_id, unique_id, config)
+
         if is_new:
             async_dispatcher_send(self.hass, SIGNAL_NEW_ENTITY.format(domain=domain), unique_id)
         else:
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=unique_id))
         if _is_stats_relevant_object_id(object_id):
             self._notify_stats_changed()
+
+    def _migrate_enabled_entity_id(self, domain, object_id, unique_id, config):
+        if domain != "binary_sensor" or object_id not in ("docker_enabled", "tugboat_enabled"):
+            return
+        wanted = config.get("default_entity_id") or ""
+        legacy = wanted.replace(f"_{object_id}", "_enabled")
+        if not wanted.endswith(f"_{object_id}") or legacy == wanted:
+            return
+        ent_reg = er.async_get(self.hass)
+        current = ent_reg.async_get_entity_id(domain, DOMAIN, unique_id)
+        if not current or current == wanted:
+            return
+        if not re.fullmatch(re.escape(legacy) + r"(_\d+)?", current):
+            return
+        if ent_reg.async_get(wanted) is not None:
+            return
+        try:
+            ent_reg.async_update_entity(current, new_entity_id=wanted)
+            _LOGGER.info("TuxD: renamed %s to %s", current, wanted)
+        except ValueError:
+            pass
 
     def _handle_discovery_clear(self, device_id, msg):
         domain = msg.get("domain")
