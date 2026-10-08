@@ -1,4 +1,5 @@
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import Entity, DeviceInfo, EntityCategory
@@ -85,7 +86,9 @@ class TuxdEntity(Entity):
         entry = self._entry
         if not entry:
             return False
-        return entry.get("device_id") in self.hub.devices
+        if type(self).__name__ == "TuxdButton":
+            return entry.get("device_id") in self.hub.devices
+        return True
 
     @property
     def name(self):
@@ -133,8 +136,11 @@ class TuxdEntity(Entity):
 
     def _send_command(self, key, payload):
         device_id = self._entry.get("device_id")
-        if device_id:
-            self.hub.send_command(device_id, key, payload)
+        if not device_id:
+            return
+        if device_id not in self.hub.devices:
+            raise HomeAssistantError(f"TuxD device {device_id} is offline")
+        self.hub.send_command(device_id, key, payload)
 
     async def async_added_to_hass(self):
         self.async_on_remove(
