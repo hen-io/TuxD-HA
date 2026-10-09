@@ -384,9 +384,16 @@ class TuxdHub:
             self._notify_stats_changed()
 
     def async_set_ws(self, device_id, ws):
-        self.devices.setdefault(device_id, {})["ws"] = ws
+        info = self.devices.setdefault(device_id, {})
+        old_ws = info.get("ws")
+        info["ws"] = ws
+        if old_ws is not None and old_ws is not ws:
+            self.hass.async_create_task(old_ws.close())
 
-    def async_device_disconnected(self, device_id):
+    def async_device_disconnected(self, device_id, ws=None):
+        current = self.devices.get(device_id, {}).get("ws")
+        if ws is not None and current is not None and current is not ws:
+            return
         self.devices.pop(device_id, None)
         for request_id, request in list(self._config_requests.items()):
             if request["device_id"] == device_id:

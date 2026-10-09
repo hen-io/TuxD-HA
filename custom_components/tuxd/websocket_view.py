@@ -88,6 +88,6 @@ class TuxdWebSocketView(HomeAssistantView):
             _LOGGER.exception("Unexpected error on TuxD websocket connection (device=%s)", device_id)
         finally:
             if connected:
-                self.hub.async_device_disconnected(device_id)
+                self.hub.async_device_disconnected(device_id, ws)
 
         return ws
