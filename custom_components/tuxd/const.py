@@ -4,6 +4,27 @@ WS_PATH = "/api/tuxd/ws"
 IMAGES_URL_PREFIX = "/api/tuxd/images"
 ENTITY_PICTURE_LOGO = f"{IMAGES_URL_PREFIX}/logo.png"
 
+DISTRO_LOGOS = {
+    "ubuntu": "ubuntu", "debian": "debian", "fedora": "fedora", "arch": "archlinux",
+    "archlinux": "archlinux", "linuxmint": "linuxmint", "opensuse": "opensuse",
+    "opensuse-leap": "opensuse", "opensuse-tumbleweed": "opensuse", "sles": "opensuse",
+    "rhel": "redhat", "centos": "centos", "alpine": "alpinelinux", "rocky": "rockylinux",
+    "almalinux": "almalinux", "raspbian": "raspberrypi", "manjaro": "manjaro",
+    "pop": "popos", "nixos": "nixos", "kali": "kalilinux",
+}
+DEFAULT_DISTRO_LOGO = "linux"
+
+
+def distro_logo_url(ids):
+    if isinstance(ids, str):
+        ids = ids.split()
+    for ident in ids if isinstance(ids, list) else []:
+        logo = DISTRO_LOGOS.get(str(ident).lower())
+        if logo:
+            return f"{IMAGES_URL_PREFIX}/distros/{logo}.svg"
+    return f"{IMAGES_URL_PREFIX}/distros/{DEFAULT_DISTRO_LOGO}.svg"
+
+
 HUB_IDENTIFIER = "hub"
 
 CONF_PAIRING_KEY = "pairing_key"

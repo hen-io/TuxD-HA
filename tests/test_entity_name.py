@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import importlib.util
 import sys
 import types
 import unittest
@@ -63,6 +64,23 @@ class EntityNameTest(unittest.TestCase):
     def test_no_registry_entry_or_name(self):
         self.assertEqual(self._run(None), [])
         self.assertEqual(self._run(types.SimpleNamespace(name=None), name=None), [])
+
+
+class DistroLogoTest(unittest.TestCase):
+    def test_logo_choice(self):
+        import os
+        spec = importlib.util.spec_from_file_location("tuxd_const", "custom_components/tuxd/const.py")
+        const = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(const)
+        url = const.distro_logo_url
+        self.assertTrue(url(["ubuntu", "debian"]).endswith("/distros/ubuntu.svg"))
+        self.assertTrue(url(["linuxmint", "ubuntu", "debian"]).endswith("/distros/linuxmint.svg"))
+        self.assertTrue(url(["somethingnew", "debian"]).endswith("/distros/debian.svg"))
+        for unknown in (["weird"], [], None, 5):
+            self.assertTrue(url(unknown).endswith("/distros/linux.svg"))
+        files = set(os.listdir("custom_components/tuxd/images/distros"))
+        for logo in set(const.DISTRO_LOGOS.values()) | {const.DEFAULT_DISTRO_LOGO}:
+            self.assertIn(f"{logo}.svg", files)
 
 
 if __name__ == "__main__":
