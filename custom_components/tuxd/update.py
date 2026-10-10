@@ -109,7 +109,11 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
 
     @property
     def entity_picture(self):
-        if (self._entry.get("object_id") or "").startswith(("docker_image_", "tugboat_image_", "tugboat_stack_")):
+        object_id = self._entry.get("object_id") or ""
+        if object_id.startswith("tugboat_stack_"):
+            picture = (self._state_json or {}).get("entity_picture")
+            return picture if isinstance(picture, str) and picture.startswith(("https://", "http://")) else None
+        if object_id.startswith(("docker_image_", "tugboat_image_")):
             return None
         return ENTITY_PICTURE_LOGO
 
