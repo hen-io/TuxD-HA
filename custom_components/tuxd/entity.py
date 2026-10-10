@@ -142,6 +142,20 @@ class TuxdEntity(Entity):
             raise HomeAssistantError(f"TuxD device {device_id} is offline")
         self.hub.send_command(device_id, key, payload)
 
+    async def async_internal_added_to_hass(self):
+        await super().async_internal_added_to_hass()
+        self._drop_device_from_friendly_name()
+
+    def _drop_device_from_friendly_name(self):
+        try:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(self.entity_id)
+            name = self.name
+            if entry is not None and entry.name is None and isinstance(name, str) and name:
+                registry.async_update_entity(self.entity_id, name=name)
+        except Exception:
+            pass
+
     async def async_added_to_hass(self):
         self.async_on_remove(
             async_dispatcher_connect(
