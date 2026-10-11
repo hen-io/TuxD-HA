@@ -16,6 +16,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdRefreshAllButton(hub),
         TuxdUpdateAllButton(hub),
         TuxdCheckHostUpdatesAllButton(hub),
+        TuxdInstallHostUpdatesAllButton(hub),
+        TuxdCheckAgentUpdatesAllButton(hub),
+        TuxdRefreshEntitiesAllButton(hub),
     ])
 
 
@@ -70,3 +73,27 @@ class TuxdCheckHostUpdatesAllButton(TuxdHubButton):
 
     async def async_press(self) -> None:
         self.hub.check_host_updates_all_devices()
+
+
+class TuxdInstallHostUpdatesAllButton(TuxdHubButton):
+    def __init__(self, hub):
+        super().__init__(hub, "install_host_updates_all", "Install Host Updates On All Devices", "mdi:package-down")
+
+    async def async_press(self) -> None:
+        self.hub.install_host_updates_all_devices()
+
+
+class TuxdCheckAgentUpdatesAllButton(TuxdHubButton):
+    def __init__(self, hub):
+        super().__init__(hub, "check_agent_updates_all", "Check Agent Updates On All Devices", "mdi:cloud-search")
+
+    async def async_press(self) -> None:
+        self.hub.check_agent_updates_all_devices()
+
+
+class TuxdRefreshEntitiesAllButton(TuxdHubButton):
+    def __init__(self, hub):
+        super().__init__(hub, "refresh_entities_all", "Refresh Entities On All Device Agents", "mdi:database-refresh")
+
+    async def async_press(self) -> None:
+        self.hub.refresh_entities_all_devices()

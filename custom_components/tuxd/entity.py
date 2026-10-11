@@ -151,7 +151,11 @@ class TuxdEntity(Entity):
             registry = er.async_get(self.hass)
             entry = registry.async_get(self.entity_id)
             name = self.name
-            if entry is not None and entry.name is None and isinstance(name, str) and name:
+            if entry is None or not isinstance(name, str) or not name:
+                return
+            device = str((self._config.get("device") or {}).get("name") or self._entry.get("device_id") or "")
+            outdated = bool(entry.name) and bool(device) and name.lower() == f"{device} {entry.name}".lower()
+            if entry.name is None or outdated:
                 registry.async_update_entity(self.entity_id, name=name)
         except Exception:
             pass

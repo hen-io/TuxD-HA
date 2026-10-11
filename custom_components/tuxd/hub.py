@@ -729,6 +729,15 @@ class TuxdHub:
     def check_host_updates_all_devices(self):
         self.hass.async_create_task(self._send_staggered("host_update/check"))
 
+    def install_host_updates_all_devices(self):
+        self.hass.async_create_task(self._send_staggered("host_update"))
+
+    def check_agent_updates_all_devices(self):
+        self.hass.async_create_task(self._send_staggered("self_update/check"))
+
+    def refresh_entities_all_devices(self):
+        self.hass.async_create_task(self._send_staggered("refresh"))
+
     def restore_entity_ids(self):
         ent_reg = er.async_get(self.hass)
         entries = er.async_entries_for_config_entry(ent_reg, self.entry.entry_id)
