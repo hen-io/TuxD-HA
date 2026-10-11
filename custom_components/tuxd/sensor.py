@@ -89,7 +89,17 @@ class TuxdSensor(TuxdEntity, SensorEntity):
                 return dt_util.parse_datetime(value)
             if device_class == "date":
                 return dt_util.parse_date(value)
+            if self._is_numeric():
+                try:
+                    float(value)
+                except ValueError:
+                    return None
         return value
+
+    def _is_numeric(self):
+        config = self._config
+        return bool(config.get("unit_of_measurement") or config.get("state_class")) \
+            and config.get("device_class") not in ("enum", "timestamp", "date")
 
     @property
     def native_unit_of_measurement(self):

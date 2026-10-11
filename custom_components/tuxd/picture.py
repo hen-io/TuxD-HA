@@ -16,6 +16,16 @@ _IMAGES_DIR = Path(__file__).parent / "images"
 _KEY = f"{DOMAIN}_pictures"
 
 
+_BUNDLED = None
+
+
+def _bundled():
+    global _BUNDLED
+    if _BUNDLED is None:
+        _BUNDLED = {p.relative_to(_IMAGES_DIR).as_posix() for p in _IMAGES_DIR.rglob("*") if p.is_file()}
+    return _BUNDLED
+
+
 def _store(hass):
     return hass.data.setdefault(_KEY, {"sources": {}, "cache": {}})
 
@@ -24,10 +34,8 @@ def picture_url(hass, source):
     if not source or hass is None:
         return None
     source = str(source)
-    if not source.startswith(("https://", "http://")):
-        path = (_IMAGES_DIR / source).resolve()
-        if _IMAGES_DIR.resolve() not in path.parents or not path.is_file():
-            return None
+    if not source.startswith(("https://", "http://")) and source not in _bundled():
+        return None
     key = hashlib.sha1(source.encode()).hexdigest()[:16]
     _store(hass)["sources"][key] = source
     return f"{URL_PREFIX}/{key}"
