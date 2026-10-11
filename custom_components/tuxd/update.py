@@ -2,7 +2,8 @@ import json
 
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 
-from .const import DOMAIN, ENTITY_PICTURE_LOGO, distro_logo_url
+from .const import DOMAIN, ENTITY_PICTURE_LOGO, distro_logo
+from .picture import picture_url
 from .entity import TuxdEntity, async_setup_dynamic_platform
 
 _DOMAIN_KEY = "update"
@@ -112,11 +113,14 @@ class TuxdUpdate(TuxdEntity, UpdateEntity):
         object_id = self._entry.get("object_id") or ""
         if object_id.startswith("tugboat_stack_"):
             picture = (self._state_json or {}).get("entity_picture")
-            return picture if isinstance(picture, str) and picture.startswith(("https://", "http://")) else None
+            return picture_url(self.hass, picture) if isinstance(picture, str) and picture.startswith(("https://", "http://")) else None
         if object_id.startswith(("docker_image_", "tugboat_image_")):
             return None
         if object_id == "host_update":
-            return distro_logo_url((self._state_json or {}).get("distro"))
+            distro = (self._state_json or {}).get("distro")
+            if not distro and str((self._config.get("device") or {}).get("model") or "").startswith("TuxD-Win"):
+                distro = ["windows"]
+            return picture_url(self.hass, distro_logo(distro))
         return ENTITY_PICTURE_LOGO
 
     async def async_install(self, version, backup: bool, **kwargs) -> None:

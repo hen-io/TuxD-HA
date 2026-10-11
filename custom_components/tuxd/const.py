@@ -11,18 +11,23 @@ DISTRO_LOGOS = {
     "rhel": "redhat", "centos": "centos", "alpine": "alpinelinux", "rocky": "rockylinux",
     "almalinux": "almalinux", "raspbian": "raspberrypi", "manjaro": "manjaro",
     "pop": "popos", "nixos": "nixos", "kali": "kalilinux",
+    "windows": "windows",
 }
 DEFAULT_DISTRO_LOGO = "linux"
 
 
-def distro_logo_url(ids):
+def distro_logo(ids):
     if isinstance(ids, str):
         ids = ids.split()
     for ident in ids if isinstance(ids, list) else []:
         logo = DISTRO_LOGOS.get(str(ident).lower())
         if logo:
-            return f"{IMAGES_URL_PREFIX}/distros/{logo}.svg"
-    return f"{IMAGES_URL_PREFIX}/distros/{DEFAULT_DISTRO_LOGO}.svg"
+            return f"distros/{logo}.svg"
+    return f"distros/{DEFAULT_DISTRO_LOGO}.svg"
+
+
+def distro_logo_url(ids):
+    return f"{IMAGES_URL_PREFIX}/{distro_logo(ids)}"
 
 
 HUB_IDENTIFIER = "hub"

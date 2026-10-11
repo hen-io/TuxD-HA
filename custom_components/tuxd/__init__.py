@@ -12,6 +12,7 @@ from .config_editor import async_setup_config_editor
 from .const import DOMAIN, HUB_IDENTIFIER, IMAGES_URL_PREFIX, ISSUE_PENDING_DEVICES, PLATFORMS
 from .hub import TuxdHub
 from .live_tty import async_setup_live_tty
+from .picture import TuxdPictureView
 from .websocket_view import TuxdWebSocketView
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths([
             StaticPathConfig(IMAGES_URL_PREFIX, str(images_dir), True)
         ])
+        hass.http.register_view(TuxdPictureView(hass))
         hass.data[_IMAGES_KEY] = True
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

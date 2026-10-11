@@ -35,6 +35,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdDevicesWithSmartErrorsSensor(hub),
         TuxdDevicesWithDockerErrorsSensor(hub),
         TuxdDevicesWithUnhealthyStacksSensor(hub),
+        TuxdFleetStackHealthSensor(hub),
         TuxdDevicesByVersionSensor(hub),
         *[TuxdVmsOverThresholdSensor(hub, *row) for row in THRESHOLD_METRICS],
     ])
@@ -329,6 +330,54 @@ class TuxdDevicesWithUnhealthyStacksSensor(TuxdHubStatSensor):
     def extra_state_attributes(self):
         stacks, total = self._scan()
         return {"devices": sorted(stacks), "stacks": stacks, "stacks_total": total}
+
+
+class TuxdFleetStackHealthSensor(TuxdHubStatSensor):
+
+    _RANK = ("unhealthy", "starting", "stopped", "healthy")
+    _attr_state_class = None
+    _attr_native_unit_of_measurement = None
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(_RANK)
+
+    def __init__(self, hub):
+        super().__init__(hub, "stack_health", "TuxD Stack Health", "mdi:ferry")
+
+    @staticmethod
+    def is_stack_health(object_id):
+        object_id = object_id or ""
+        return object_id.endswith("_health") and object_id.startswith(("tugboat_", "docker_stack_"))
+
+    def _stacks(self):
+        stacks = {}
+        for e in self.hub.entities.values():
+            if not self.is_stack_health(e.get("object_id")):
+                continue
+            health = str(e.get("state") or "").strip().lower()
+            if health not in self._RANK:
+                continue
+            name = str((e.get("config") or {}).get("name") or e.get("object_id"))
+            for suffix in (" Health", " Helse"):
+                if name.endswith(suffix):
+                    name = name[: -len(suffix)]
+                    break
+            stacks.setdefault(e.get("device_id"), {})[name] = health
+        return stacks
+
+    @property
+    def native_value(self):
+        found = {h for per_host in self._stacks().values() for h in per_host.values()}
+        return next((h for h in self._RANK if h in found), None)
+
+    @property
+    def extra_state_attributes(self):
+        stacks = self._stacks()
+        counts = {}
+        for per_host in stacks.values():
+            for health in per_host.values():
+                counts[health] = counts.get(health, 0) + 1
+        problems = {d: {n: h for n, h in s.items() if h != "healthy"} for d, s in stacks.items()}
+        return {"counts": counts, "problems": {d: s for d, s in problems.items() if s}, "stacks": stacks}
 
 
 class TuxdVmsOverThresholdSensor(TuxdHubStatSensor):
