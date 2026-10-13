@@ -62,6 +62,18 @@ THRESHOLD_METRICS = [
     ("load_avg_15m", "Load Average 15m", "mdi:gauge", None, 0, 1000, 0.1, 4),
 ]
 
+THRESHOLD_SOURCES = {
+    "storage_used_pct": ("disk_root_used_space", "storage_used_pct"),
+}
+
+
+def threshold_sources(key):
+    return THRESHOLD_SOURCES.get(key, (key,))
+
+
+WARNING_OBJECT_ID = "system_warning"
+WARNING_REASON_OBJECT_ID = "system_warning_reason"
+
 PLATFORMS = [
     "sensor",
     "binary_sensor",

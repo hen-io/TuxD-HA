@@ -35,9 +35,12 @@ from .const import (
     SIGNAL_STATE_UPDATE,
     SIGNAL_THRESHOLDS_CHANGED,
     THRESHOLD_METRICS,
+    WARNING_OBJECT_ID,
+    WARNING_REASON_OBJECT_ID,
+    threshold_sources,
 )
 
-_THRESHOLD_OBJECT_IDS = frozenset(row[0] for row in THRESHOLD_METRICS)
+_THRESHOLD_OBJECT_IDS = frozenset(oid for row in THRESHOLD_METRICS for oid in threshold_sources(row[0]))
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +99,7 @@ class TuxdHub:
         self.device_keys = {}
         self.pending_devices = {}
         self.thresholds = {}
+        self._threshold_warnings = {}
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
         self.last_seen_enabled = True
         self.online_sensors_enabled = True
@@ -655,6 +659,8 @@ class TuxdHub:
             else:
                 entry["state"] = value
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
+            if (entry.get("object_id") or "") in _THRESHOLD_OBJECT_IDS:
+                self._refresh_threshold_warning(device_id)
             if _is_stats_relevant_object_id(entry.get("object_id") or ""):
                 self._notify_stats_changed()
 
@@ -764,6 +770,35 @@ class TuxdHub:
         self.thresholds[key] = value
         await self._persist()
         async_dispatcher_send(self.hass, SIGNAL_THRESHOLDS_CHANGED)
+        for device_id in {e.get("device_id") for e in self.entities.values()}:
+            self._refresh_threshold_warning(device_id)
+
+    def metric_value(self, device_id, key):
+        for object_id in threshold_sources(key):
+            entry = self.entities.get(f"{device_id}_{object_id}")
+            try:
+                return float(entry.get("state"))
+            except (AttributeError, TypeError, ValueError):
+                continue
+        return None
+
+    def threshold_warning(self, device_id):
+        return self._threshold_warnings.get(device_id, "")
+
+    def _refresh_threshold_warning(self, device_id):
+        parts = []
+        for key, name, _icon, unit, _min, _max, _step, default in THRESHOLD_METRICS:
+            value = self.metric_value(device_id, key)
+            limit = self.thresholds.get(key, default)
+            if value is not None and value > limit:
+                suffix = unit if unit == "%" else (f" {unit}" if unit else "")
+                parts.append(f"{name} {value:g}{suffix} > {limit:g}{suffix}")
+        text = "; ".join(parts)
+        if text == self._threshold_warnings.get(device_id, ""):
+            return
+        self._threshold_warnings[device_id] = text
+        for object_id in (WARNING_OBJECT_ID, WARNING_REASON_OBJECT_ID):
+            async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=f"{device_id}_{object_id}"))
 
     async def set_online_timeout(self, value):
         self.online_timeout = max(10, min(86400, int(value)))

@@ -16,6 +16,7 @@ from .const import (
     THRESHOLD_METRICS,
 )
 from .entity import TuxdEntity, async_setup_dynamic_platform
+from .const import WARNING_REASON_OBJECT_ID
 from .update import TuxdUpdate
 
 _DOMAIN_KEY = "sensor"
@@ -83,6 +84,11 @@ class TuxdSensor(TuxdEntity, SensorEntity):
     @property
     def native_value(self):
         value = self._entry.get("state")
+        if self._entry.get("object_id") == WARNING_REASON_OBJECT_ID:
+            over = self.hub.threshold_warning(self._entry.get("device_id"))
+            if over:
+                own = "" if value in (None, "", "None", "unknown") else str(value)
+                return "; ".join(p for p in (own, over) if p)[:255]
         if isinstance(value, str):
             device_class = self._config.get("device_class")
             if device_class == "timestamp":
@@ -400,15 +406,10 @@ class TuxdVmsOverThresholdSensor(TuxdHubStatSensor):
     def _over_values(self):
         threshold = self.hub.thresholds.get(self._object_id, self._default)
         values = {}
-        for e in self.hub.entities.values():
-            if e.get("object_id") != self._object_id:
-                continue
-            try:
-                value = float(e.get("state"))
-            except (TypeError, ValueError):
-                continue
-            if value > threshold:
-                values[e.get("device_id")] = value
+        for device_id in {e.get("device_id") for e in self.hub.entities.values()}:
+            value = self.hub.metric_value(device_id, self._object_id)
+            if value is not None and value > threshold:
+                values[device_id] = value
         return values
 
     @property

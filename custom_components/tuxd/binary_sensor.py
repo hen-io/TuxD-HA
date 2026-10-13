@@ -15,6 +15,7 @@ from .const import (
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
 )
 from .entity import TuxdEntity, async_setup_dynamic_platform
+from .const import WARNING_OBJECT_ID
 
 _DOMAIN_KEY = "binary_sensor"
 
@@ -69,6 +70,8 @@ class TuxdBinarySensor(TuxdEntity, BinarySensorEntity):
     def is_on(self):
         state = self._entry.get("state")
         payload_on = self._config.get("payload_on", "ON")
+        if self._entry.get("object_id") == WARNING_OBJECT_ID and self.hub.threshold_warning(self._entry.get("device_id")):
+            return True
         return state == payload_on
 
     @property
