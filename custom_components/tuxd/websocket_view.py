@@ -15,7 +15,7 @@ _MAX_DEVICE_ID_LEN = 128
 def _valid_device_id(device_id):
     if not isinstance(device_id, str) or not (1 <= len(device_id) <= _MAX_DEVICE_ID_LEN):
         return False
-    return not any(ord(c) < 0x20 or ord(c) == 0x7F for c in device_id)
+    return not any(ord(c) < 0x20 or ord(c) == 0x7F or c == "/" for c in device_id)
 
 
 _MAX_MSG_SIZE = 256 * 1024

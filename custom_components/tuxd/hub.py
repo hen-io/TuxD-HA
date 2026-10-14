@@ -167,11 +167,14 @@ class TuxdHub:
                 _MAX_PENDING_DEVICES, device_id,
             )
             return
-        self.pending_devices[device_id] = {
+        entry = {
             "model": hello.get("model"),
             "sw_version": hello.get("sw_version"),
             "presented_key": presented_key,
         }
+        if self.pending_devices.get(device_id) == entry:
+            return
+        self.pending_devices[device_id] = entry
         await self._persist()
         self._sync_pending_issue()
         _LOGGER.info("TuxD: device %s is awaiting approval", device_id)
@@ -517,6 +520,8 @@ class TuxdHub:
         try:
             msg = json.loads(raw)
         except Exception:
+            return
+        if not isinstance(msg, dict):
             return
 
         self._touch_last_seen(device_id)

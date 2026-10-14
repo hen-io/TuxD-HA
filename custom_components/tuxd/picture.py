@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import mimetypes
+import re
 from pathlib import Path
 
 from aiohttp import web
@@ -14,6 +15,7 @@ PADDING = 0.15
 MAX_BYTES = 1024 * 1024
 _IMAGES_DIR = Path(__file__).parent / "images"
 _KEY = f"{DOMAIN}_pictures"
+_IMAGE_TYPE = re.compile(r"^image/[a-z0-9][a-z0-9.+-]{0,40}$")
 
 
 _BUNDLED = None
@@ -34,7 +36,7 @@ def picture_url(hass, source):
     if not source or hass is None:
         return None
     source = str(source)
-    if not source.startswith(("https://", "http://")) and source not in _bundled():
+    if not source.startswith("https://") and source not in _bundled():
         return None
     key = hashlib.sha1(source.encode()).hexdigest()[:16]
     _store(hass)["sources"][key] = source
@@ -67,9 +69,9 @@ class TuxdPictureView(HomeAssistantView):
         if source is None:
             return web.Response(status=404)
         try:
-            if source.startswith(("https://", "http://")):
+            if source.startswith("https://"):
                 session = async_get_clientsession(self.hass)
-                async with session.get(source, timeout=10) as resp:
+                async with session.get(source, timeout=10, allow_redirects=False) as resp:
                     if resp.status != 200:
                         return web.Response(status=502)
                     data = await resp.content.read(MAX_BYTES + 1)
@@ -80,7 +82,7 @@ class TuxdPictureView(HomeAssistantView):
                 ctype = mimetypes.guess_type(path.name)[0] or ""
         except Exception:
             return web.Response(status=502)
-        if len(data) > MAX_BYTES or not ctype.startswith("image/"):
+        if len(data) > MAX_BYTES or not _IMAGE_TYPE.match(ctype.lower()):
             return web.Response(status=502)
         body = wrap(data, ctype)
         store["cache"][key] = body
