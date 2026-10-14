@@ -695,7 +695,9 @@ class TuxdHub:
     async def check_master(self, given):
         if not self.master_password_hash:
             return True
-        if given and await self.hass.async_add_executor_job(verify_password, given, self.master_password_hash):
+        if not given:
+            return False
+        if await self.hass.async_add_executor_job(verify_password, given, self.master_password_hash):
             return True
         await asyncio.sleep(1.0)
         return False
