@@ -70,6 +70,8 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             menu_options.append("view_keys")
         if hub.devices:
             menu_options.append("config")
+            menu_options.append("agent_password")
+        menu_options.append("master_password")
         if hub.terminal_enabled_devices():
             menu_options.append("run_command")
         if hub.device_keys:
@@ -170,13 +172,16 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         if not device_id or device_id not in hub.devices:
             return await self.async_step_config_device()
 
+        password = getattr(self, "_config_password", None)
         if user_input is not None:
-            result = await hub.async_set_device_config(device_id, user_input.get("yaml", ""))
+            result = await hub.async_set_device_config(device_id, user_input.get("yaml", ""), password)
             if not result.get("ok"):
                 return await self.async_step_config(errors={"base": result.get("error", "Could not save configuration")})
             return self.async_create_entry(title="", data={})
 
-        result = await hub.async_get_device_config(device_id)
+        result = await hub.async_get_device_config(device_id, password)
+        if result.get("auth"):
+            return await self.async_step_config_device(errors={"password": f"password_{result['auth']}"})
         if not result.get("ok"):
             return await self.async_step_config(errors={"base": result.get("error", "Could not read configuration")})
         self._config_content = result.get("content", "")
@@ -191,17 +196,22 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={"device": device_id},
         )
 
-    async def async_step_config_device(self, user_input=None):
+    async def async_step_config_device(self, user_input=None, errors=None):
         hub = self._hub()
         if user_input is not None:
             self._config_device = user_input["device"]
+            self._config_password = user_input.get("password") or None
             return await self.async_step_config()
         choices = {device_id: device_id for device_id in hub.devices}
         if not choices:
             return self.async_create_entry(title="", data={})
         return self.async_show_form(
             step_id="config_device",
-            data_schema=vol.Schema({vol.Required("device"): vol.In(choices)}),
+            data_schema=vol.Schema({
+                vol.Required("device", default=getattr(self, "_config_device", None) or vol.UNDEFINED): vol.In(choices),
+                vol.Optional("password", default=""): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
+            }),
+            errors=errors or {},
         )
 
 
@@ -219,6 +229,8 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_run_command(errors={"devices": "no_devices_selected"})
             if not cmd:
                 return await self.async_step_run_command(errors={"command": "command_required"})
+            if len(targets) > 1 and not await hub.check_master(user_input.get("master_password")):
+                return await self.async_step_run_command(errors={"master_password": "master_incorrect"})
             results = await asyncio.gather(*[
                 hub.run_terminal_command(device_id, cmd, password or None) for device_id in targets
             ])
@@ -234,7 +246,80 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
                 selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
             ),
         })
+        if hub.master_required():
+            schema = schema.extend({vol.Optional("master_password", default=""): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))})
         return self.async_show_form(step_id="run_command", data_schema=schema, errors=errors or {})
+
+
+    async def async_step_agent_password(self, user_input=None, errors=None):
+        hub = self._hub()
+        devices = sorted(hub.devices)
+        if not devices:
+            return self.async_create_entry(title="", data={})
+
+        if user_input is not None:
+            targets = user_input.get("devices") or []
+            new = user_input.get("new_password") or ""
+            remove = bool(user_input.get("remove"))
+            if not targets:
+                return await self.async_step_agent_password(errors={"devices": "no_devices_selected"})
+            if not remove and not new:
+                return await self.async_step_agent_password(errors={"new_password": "password_empty"})
+            if not remove and new != (user_input.get("confirm_password") or ""):
+                return await self.async_step_agent_password(errors={"confirm_password": "password_mismatch"})
+            if len(targets) > 1 and not await hub.check_master(user_input.get("master_password")):
+                return await self.async_step_agent_password(errors={"master_password": "master_incorrect"})
+            current = user_input.get("current_password") or None
+            results = await asyncio.gather(*[
+                hub.async_set_device_password(d, "" if remove else new, current) for d in targets
+            ])
+            lines = []
+            for device_id, result in zip(targets, results):
+                if result.get("ok"):
+                    lines.append(f"**{device_id}** - {'removed' if remove else 'set'}")
+                else:
+                    lines.append(f"**{device_id}** - FAILED: {result.get('error', 'no answer')}")
+            return self.async_show_form(
+                step_id="agent_password_result", data_schema=vol.Schema({}),
+                description_placeholders={"results": "\n\n".join(lines)},
+            )
+
+        schema = vol.Schema({
+            vol.Required("devices", default=devices): cv.multi_select({d: d for d in devices}),
+            vol.Optional("current_password", default=""): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
+            vol.Optional("new_password", default=""): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
+            vol.Optional("confirm_password", default=""): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
+            vol.Optional("remove", default=False): bool,
+        })
+        if hub.master_required():
+            schema = schema.extend({vol.Optional("master_password", default=""): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))})
+        return self.async_show_form(step_id="agent_password", data_schema=schema, errors=errors or {})
+
+    async def async_step_agent_password_result(self, user_input=None):
+        return self.async_create_entry(title="", data={})
+
+    async def async_step_master_password(self, user_input=None, errors=None):
+        hub = self._hub()
+        if user_input is not None:
+            new = user_input.get("new_password") or ""
+            remove = bool(user_input.get("remove"))
+            if hub.master_required() and not await hub.check_master(user_input.get("current_password")):
+                return await self.async_step_master_password(errors={"current_password": "master_incorrect"})
+            if not remove and not new:
+                return await self.async_step_master_password(errors={"new_password": "password_empty"})
+            if not remove and new != (user_input.get("confirm_password") or ""):
+                return await self.async_step_master_password(errors={"confirm_password": "password_mismatch"})
+            await hub.set_master_password("" if remove else new)
+            return self.async_create_entry(title="", data={})
+
+        fields = {}
+        if hub.master_required():
+            fields[vol.Optional("current_password", default="")] = selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))
+        fields[vol.Optional("new_password", default="")] = selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))
+        fields[vol.Optional("confirm_password", default="")] = selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))
+        if hub.master_required():
+            fields[vol.Optional("remove", default=False)] = bool
+        return self.async_show_form(step_id="master_password", data_schema=vol.Schema(fields), errors=errors or {})
 
     async def async_step_run_command_result(self, user_input=None, results=None):
         if results is not None:

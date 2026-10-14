@@ -26,6 +26,8 @@
           "view_keys": "View device keys",
           "config": "Edit device configuration",
           "run_command": "Run terminal command",
+          "agent_password": "Set agent password",
+          "master_password": "Set master password",
           "restore_entity_ids": "Restore entity IDs",
           "manual_key": "Set a specific key"
         }
@@ -49,9 +51,10 @@
       },
       "config_device": {
         "title": "Choose TuxD device",
-        "description": "Select a connected direct-mode device to edit.",
+        "description": "Select a connected direct-mode device to edit. If it has a password, enter it too.",
         "data": {
-          "device": "Device"
+          "device": "Device",
+          "password": "Device password (if it has one)"
         }
       },
       "config": {
@@ -71,12 +74,39 @@
         "data": {
           "devices": "Devices",
           "command": "Command",
-          "password": "Password (if required)"
+          "password": "Password (if required)",
+          "master_password": "Master password (for more than one device)"
         }
       },
       "run_command_result": {
         "title": "Command results",
         "description": "{results}"
+      },
+      "agent_password": {
+        "title": "Set agent password",
+        "description": "Sets the password the terminals and the configuration editor ask for, on every device checked below (all are checked by default). Devices store only a hash of it, never the password itself. A device that already has a password needs it as the current password. Tick Remove to remove the password instead.",
+        "data": {
+          "devices": "Devices",
+          "current_password": "Current password (devices that have one)",
+          "new_password": "New password",
+          "confirm_password": "New password again",
+          "remove": "Remove the password",
+          "master_password": "Master password (for more than one device)"
+        }
+      },
+      "agent_password_result": {
+        "title": "Agent passwords",
+        "description": "{results}"
+      },
+      "master_password": {
+        "title": "Set master password",
+        "description": "The integration's own admin password. When it is set, it is asked for before a command goes to more than one device: the multi-agent terminal card, Run terminal command and Set agent password. Only a hash of it is stored. The multi-agent card also tries it as each device's own password.",
+        "data": {
+          "current_password": "Current master password",
+          "new_password": "New master password",
+          "confirm_password": "New master password again",
+          "remove": "Remove the master password"
+        }
       },
       "manual_key": {
         "title": "Set a specific key",
@@ -107,7 +137,12 @@
       "key_required": "Pick a device AND enter a key - both are needed to set one manually.",
       "key_collision": "That key is already used by a different device - each device needs its own unique key.",
       "no_devices_selected": "Select at least one device to run the command on.",
-      "command_required": "Enter a command to run."
+      "command_required": "Enter a command to run.",
+      "password_required": "This device has a password - enter it.",
+      "password_incorrect": "Incorrect password.",
+      "password_empty": "Enter the new password (or tick Remove).",
+      "password_mismatch": "The two new passwords are not the same.",
+      "master_incorrect": "Incorrect master password."
     }
   },
   "issues": {

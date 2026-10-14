@@ -15,6 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .password import hash_password, verify_password
 from .const import (
     DOMAIN,
     HUB_IDENTIFIER,
@@ -99,6 +100,7 @@ class TuxdHub:
         self.device_keys = {}
         self.pending_devices = {}
         self.thresholds = {}
+        self.master_password_hash = ""
         self._threshold_warnings = {}
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
         self.last_seen_enabled = True
@@ -122,6 +124,7 @@ class TuxdHub:
             self.device_keys = dict(stored.get("device_keys", {}))
             self.pending_devices = dict(stored.get("pending_devices", {}))
             self.thresholds = dict(stored.get("thresholds", {}))
+            self.master_password_hash = str(stored.get("master_password_hash", "") or "")
             online_timeout_raw = stored.get("online_timeout", ONLINE_TIMEOUT_DEFAULT)
             needs_timeout_migration = "online_timeout" in stored and not stored.get("online_timeout_is_seconds")
             if needs_timeout_migration:
@@ -302,6 +305,7 @@ class TuxdHub:
             self.device_keys = dict(stored.get("device_keys", self.device_keys))
             self.pending_devices = dict(stored.get("pending_devices", self.pending_devices))
             self.thresholds = dict(stored.get("thresholds", self.thresholds))
+            self.master_password_hash = str(stored.get("master_password_hash", self.master_password_hash) or "")
             self.online_timeout = max(10, min(86400, int(stored.get("online_timeout", self.online_timeout))))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", self.last_seen_enabled))
             self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", self.online_sensors_enabled))
@@ -313,6 +317,7 @@ class TuxdHub:
             "device_keys": self.device_keys,
             "pending_devices": self.pending_devices,
             "thresholds": self.thresholds,
+            "master_password_hash": self.master_password_hash,
             "online_timeout": self.online_timeout,
             "online_timeout_is_seconds": True,
             "last_seen_enabled": self.last_seen_enabled,
@@ -665,11 +670,36 @@ class TuxdHub:
                 self._notify_stats_changed()
 
 
-    async def async_get_device_config(self, device_id):
-        return await self._async_config_request(device_id, "get")
+    async def async_get_device_config(self, device_id, password=None):
+        return await self._async_config_request(device_id, "get", password=password)
 
-    async def async_set_device_config(self, device_id, content):
-        return await self._async_config_request(device_id, "set", content)
+    async def async_set_device_config(self, device_id, content, password=None):
+        return await self._async_config_request(device_id, "set", content, password=password)
+
+    async def async_device_request(self, device_id, action, content=None, password=None):
+        return await self._async_config_request(device_id, action, content, password=password)
+
+    async def async_set_device_password(self, device_id, new_password, password=None):
+        password_hash = await self.hass.async_add_executor_job(hash_password, new_password) if new_password else ""
+        return await self._async_config_request(device_id, "set_password", password_hash, password=password)
+
+
+    def master_required(self):
+        return bool(self.master_password_hash)
+
+    async def check_master(self, given):
+        if not self.master_password_hash:
+            return True
+        if given and await self.hass.async_add_executor_job(verify_password, given, self.master_password_hash):
+            return True
+        await asyncio.sleep(1.0)
+        return False
+
+    async def set_master_password(self, new_password):
+        self.master_password_hash = (
+            await self.hass.async_add_executor_job(hash_password, new_password) if new_password else ""
+        )
+        await self._persist()
 
     def _resolve_device_id(self, device_id):
         if device_id in self.devices:
@@ -678,9 +708,13 @@ class TuxdHub:
         for real_id in self.devices:
             if re.sub(r"[-_]+", "_", real_id).lower() == normalized:
                 return real_id
+        slug = re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")
+        for real_id in self.devices:
+            if re.sub(r"[^a-z0-9]+", "_", real_id.lower()).strip("_") == slug:
+                return real_id
         return None
 
-    async def _async_config_request(self, device_id, action, content=None):
+    async def _async_config_request(self, device_id, action, content=None, password=None):
         resolved = self._resolve_device_id(device_id)
         if resolved is None or "ws" not in self.devices[resolved]:
             return {"ok": False, "error": "Device is not connected"}
@@ -691,6 +725,8 @@ class TuxdHub:
         payload = {"request_id": request_id, "action": action}
         if content is not None:
             payload["content"] = content
+        if password:
+            payload["password"] = password
         self.send_command(device_id, f"tuxd/{device_id}/config/{action}", json.dumps(payload))
         try:
             return await asyncio.wait_for(future, timeout=10)
