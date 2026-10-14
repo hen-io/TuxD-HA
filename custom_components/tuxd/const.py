@@ -10,7 +10,7 @@ DISTRO_LOGOS = {
     "opensuse-leap": "opensuse", "opensuse-tumbleweed": "opensuse", "sles": "opensuse",
     "rhel": "redhat", "centos": "centos", "alpine": "alpinelinux", "rocky": "rockylinux",
     "almalinux": "almalinux", "raspbian": "raspberrypi", "manjaro": "manjaro",
-    "pop": "popos", "nixos": "nixos", "kali": "kalilinux",
+    "pop": "popos", "nixos": "nixos", "kali": "kalilinux", "proxmox": "proxmox",
     "windows": "windows",
 }
 DEFAULT_DISTRO_LOGO = "linux"
