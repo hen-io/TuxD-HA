@@ -166,5 +166,33 @@
         }
       }
     }
+  },
+  "services": {
+    "run_action": {
+      "name": "Run a TuxD action",
+      "description": "Runs one of an agent's actions (its sensor.<host>_actions lists them): TuxD's own, or an integration's such as systemd or TugBoat.",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The TuxD device name."
+        },
+        "integration": {
+          "name": "Integration",
+          "description": "tuxd, systemd, tugboat ..."
+        },
+        "action": {
+          "name": "Action",
+          "description": "The action id, e.g. restart."
+        },
+        "target": {
+          "name": "Target",
+          "description": "What it runs on, when it takes one (a service, a stack)."
+        },
+        "password": {
+          "name": "Device password",
+          "description": "Needed when the device has a password."
+        }
+      }
+    }
   }
 }

@@ -81,7 +81,8 @@ class _HeadlessTtyCollector:
 def _is_stats_relevant_object_id(object_id):
     object_id = object_id or ""
     return (
-        object_id in ("system_error", "system_error_reason", "host_update", "self_update", "docker_containers_error")
+        object_id in ("system_error", "system_error_reason", "system_warning", "system_warning_reason",
+                      "host_update", "self_update", "docker_containers_error")
         or object_id in _THRESHOLD_OBJECT_IDS
         or (object_id.startswith("disk_") and object_id.endswith("_smart_errors"))
         or (object_id.startswith(("tugboat_", "docker_stack_")) and object_id.endswith("_health"))

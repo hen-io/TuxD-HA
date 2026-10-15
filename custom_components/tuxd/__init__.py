@@ -8,6 +8,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType
 
+from .actions import async_setup_actions
 from .config_editor import async_setup_config_editor
 from .const import DOMAIN, HUB_IDENTIFIER, IMAGES_URL_PREFIX, ISSUE_PENDING_DEVICES, PLATFORMS
 from .hub import TuxdHub
@@ -52,6 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not hass.data.get(_CONFIG_EDITOR_KEY):
         async_setup_config_editor(hass)
+        async_setup_actions(hass)
         hass.data[_CONFIG_EDITOR_KEY] = True
 
     if not hass.data.get(_IMAGES_KEY):

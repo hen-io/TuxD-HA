@@ -1,0 +1,25 @@
+run_action:
+  fields:
+    device_id:
+      required: true
+      example: "boxd"
+      selector:
+        text:
+    integration:
+      required: true
+      example: "systemd"
+      selector:
+        text:
+    action:
+      required: true
+      example: "restart"
+      selector:
+        text:
+    target:
+      example: "nginx.service"
+      selector:
+        text:
+    password:
+      selector:
+        text:
+          type: password

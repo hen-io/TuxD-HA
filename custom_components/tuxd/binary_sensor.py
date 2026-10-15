@@ -13,6 +13,7 @@ from .const import (
     SIGNAL_LAST_SEEN_UPDATE,
     SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED,
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
+    SIGNAL_THRESHOLDS_CHANGED,
 )
 from .entity import TuxdEntity, async_setup_dynamic_platform
 from .const import WARNING_OBJECT_ID
@@ -55,7 +56,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     for device_id in list(hub.device_keys):
         _add_online(device_id)
 
-    async_add_entities([TuxdFleetErrorBinarySensor(hub)])
+    async_add_entities([TuxdFleetErrorBinarySensor(hub), TuxdFleetWarningBinarySensor(hub)])
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_DEVICE_APPROVED, _add_online)
@@ -174,4 +175,37 @@ class TuxdFleetErrorBinarySensor(BinarySensorEntity):
     async def async_added_to_hass(self):
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_HUB_STATS_UPDATE, self.async_write_ha_state)
+        )
+
+
+class TuxdFleetWarningBinarySensor(TuxdFleetErrorBinarySensor):
+
+    _attr_icon = "mdi:alert-outline"
+
+    def __init__(self, hub):
+        super().__init__(hub)
+        self._attr_unique_id = f"{DOMAIN}_hub_fleet_warning"
+        self._attr_name = "TuxD Warning"
+
+    def _errors(self):
+        reasons = {
+            e.get("device_id"): e.get("state")
+            for e in self.hub.entities.values() if e.get("object_id") == "system_warning_reason"
+        }
+        warnings = {}
+        for e in self.hub.entities.values():
+            if e.get("object_id") != "system_warning":
+                continue
+            device = e.get("device_id")
+            over = self.hub.threshold_warning(device) if hasattr(self.hub, "threshold_warning") else ""
+            if e.get("state") == "ON" or over:
+                own = reasons.get(device) if e.get("state") == "ON" else ""
+                own = "" if own in (None, "None", "unknown") else own
+                warnings[device] = "; ".join(p for p in (own, over) if p)
+        return warnings
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_THRESHOLDS_CHANGED, self.async_write_ha_state)
         )
