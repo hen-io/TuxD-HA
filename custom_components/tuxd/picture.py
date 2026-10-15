@@ -32,11 +32,14 @@ def _store(hass):
     return hass.data.setdefault(_KEY, {"sources": {}, "cache": {}})
 
 
+_DATA_URI = re.compile(r"^data:(image/[a-z0-9][a-z0-9.+-]{0,40});base64,([A-Za-z0-9+/=]+)$")
+
+
 def picture_url(hass, source):
     if not source or hass is None:
         return None
     source = str(source)
-    if not source.startswith("https://") and source not in _bundled():
+    if not source.startswith("https://") and source not in _bundled() and not _DATA_URI.match(source):
         return None
     key = hashlib.sha1(source.encode()).hexdigest()[:16]
     _store(hass)["sources"][key] = source
@@ -69,7 +72,10 @@ class TuxdPictureView(HomeAssistantView):
         if source is None:
             return web.Response(status=404)
         try:
-            if source.startswith("https://"):
+            inline = _DATA_URI.match(source)
+            if inline:
+                ctype, data = inline.group(1), base64.b64decode(inline.group(2))
+            elif source.startswith("https://"):
                 session = async_get_clientsession(self.hass)
                 async with session.get(source, timeout=10, allow_redirects=False) as resp:
                     if resp.status != 200:

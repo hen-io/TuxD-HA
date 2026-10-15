@@ -132,6 +132,9 @@ class TuxdEntity(Entity):
     @property
     def extra_state_attributes(self):
         attrs = self._entry.get("attributes")
+        if isinstance(attrs, dict) and str(attrs.get("icon_url") or "").startswith("data:"):
+            from .picture import picture_url
+            attrs = dict(attrs, icon_url=picture_url(self.hass, attrs["icon_url"]) or "")
         return attrs or None
 
     def _send_command(self, key, payload):
