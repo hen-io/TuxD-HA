@@ -57,6 +57,8 @@ def compute_suggested_object_id(config, device_id, object_id):
     return None
 
 
+_ITEM_COMPONENTS = ("TugBoat", "Docker", "Systemd", "Proxmox")
+
 _READ_ONLY_ENTITY_CLASSES = frozenset({"TuxdSensor", "TuxdBinarySensor", "TuxdUpdate"})
 
 
@@ -157,7 +159,8 @@ class TuxdEntity(Entity):
             if entry is None or not isinstance(name, str) or not name:
                 return
             device = str((self._config.get("device") or {}).get("name") or self._entry.get("device_id") or "")
-            outdated = bool(entry.name) and bool(device) and name.lower() == f"{device} {entry.name}".lower()
+            heads = ([device] if device else []) + list(_ITEM_COMPONENTS)
+            outdated = bool(entry.name) and any(name.lower() == f"{head} {entry.name}".lower() for head in heads)
             if entry.name is None or outdated:
                 registry.async_update_entity(self.entity_id, name=name)
         except Exception:
