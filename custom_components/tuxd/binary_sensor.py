@@ -13,8 +13,10 @@ from .const import (
     SIGNAL_LAST_SEEN_UPDATE,
     SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED,
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
+    SIGNAL_PROBLEM_DELAY_CHANGED,
     SIGNAL_THRESHOLDS_CHANGED,
 )
+from homeassistant.helpers.event import async_call_later
 from .entity import TuxdEntity, async_setup_dynamic_platform
 from .const import WARNING_OBJECT_ID
 
@@ -147,10 +149,19 @@ class TuxdFleetErrorBinarySensor(BinarySensorEntity):
         self.hub = hub
         self._attr_unique_id = f"{DOMAIN}_hub_fleet_error"
         self._attr_name = "TuxD Error"
+        self._next_due = None
+        self._due_cancel = None
 
     @property
     def device_info(self):
         return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+    def _lasted(self, since):
+        left = self.hub.problem_left(since) if hasattr(self.hub, "problem_left") else 0.0
+        if left > 0:
+            self._next_due = left if self._next_due is None else min(self._next_due, left)
+            return False
+        return True
 
     def _errors(self):
         reasons = {
@@ -160,7 +171,7 @@ class TuxdFleetErrorBinarySensor(BinarySensorEntity):
         return {
             e.get("device_id"): reasons.get(e.get("device_id")) or ""
             for e in self.hub.entities.values()
-            if e.get("object_id") == "system_error" and e.get("state") == "ON"
+            if e.get("object_id") == "system_error" and e.get("state") == "ON" and self._lasted(e.get("changed_at"))
         }
 
     @property
@@ -172,10 +183,19 @@ class TuxdFleetErrorBinarySensor(BinarySensorEntity):
         errors = self._errors()
         return {"devices": sorted(errors), "reasons": errors}
 
+    def _refresh(self, *_args):
+        self._next_due = None
+        self.async_write_ha_state()
+        if self._due_cancel:
+            self._due_cancel()
+            self._due_cancel = None
+        if self._next_due is not None:
+            self._due_cancel = async_call_later(self.hass, self._next_due + 0.5, self._refresh)
+
     async def async_added_to_hass(self):
-        self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_HUB_STATS_UPDATE, self.async_write_ha_state)
-        )
+        for signal in (SIGNAL_HUB_STATS_UPDATE, SIGNAL_PROBLEM_DELAY_CHANGED):
+            self.async_on_remove(async_dispatcher_connect(self.hass, signal, self._refresh))
+        self.async_on_remove(lambda: self._due_cancel and self._due_cancel())
 
 
 class TuxdFleetWarningBinarySensor(TuxdFleetErrorBinarySensor):
@@ -198,8 +218,11 @@ class TuxdFleetWarningBinarySensor(TuxdFleetErrorBinarySensor):
                 continue
             device = e.get("device_id")
             over = self.hub.threshold_warning(device) if hasattr(self.hub, "threshold_warning") else ""
-            if e.get("state") == "ON" or over:
-                own = reasons.get(device) if e.get("state") == "ON" else ""
+            if over and not self._lasted(self.hub.threshold_warning_since(device) if hasattr(self.hub, "threshold_warning_since") else 0):
+                over = ""
+            own_on = e.get("state") == "ON" and self._lasted(e.get("changed_at"))
+            if own_on or over:
+                own = reasons.get(device) if own_on else ""
                 own = "" if own in (None, "None", "unknown") else own
                 warnings[device] = "; ".join(p for p in (own, over) if p)
         return warnings
@@ -207,5 +230,5 @@ class TuxdFleetWarningBinarySensor(TuxdFleetErrorBinarySensor):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_THRESHOLDS_CHANGED, self.async_write_ha_state)
+            async_dispatcher_connect(self.hass, SIGNAL_THRESHOLDS_CHANGED, self._refresh)
         )

@@ -7,6 +7,7 @@ from .const import (
     HUB_IDENTIFIER,
     SIGNAL_LAST_SEEN_UPDATE_INTERVAL_CHANGED,
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
+    SIGNAL_PROBLEM_DELAY_CHANGED,
     SIGNAL_THRESHOLDS_CHANGED,
     THRESHOLD_METRICS,
 )
@@ -23,6 +24,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdThresholdNumber(hub, *row) for row in THRESHOLD_METRICS
     ])
     async_add_entities([TuxdOnlineTimeoutNumber(hub)])
+    async_add_entities([TuxdProblemDelayNumber(hub)])
     async_add_entities([TuxdLastSeenUpdateIntervalNumber(hub)])
 
 
@@ -160,4 +162,37 @@ class TuxdLastSeenUpdateIntervalNumber(NumberEntity):
                 SIGNAL_LAST_SEEN_UPDATE_INTERVAL_CHANGED,
                 self.async_write_ha_state,
             )
+        )
+
+
+class TuxdProblemDelayNumber(NumberEntity):
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 0
+    _attr_native_max_value = 86400
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = "s"
+    _attr_icon = "mdi:timer-alert-outline"
+
+    def __init__(self, hub):
+        self.hub = hub
+        self._attr_unique_id = f"{DOMAIN}_hub_problem_delay"
+        self._attr_name = "TuxD Problem Delay"
+
+    @property
+    def device_info(self):
+        return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+    @property
+    def native_value(self):
+        return self.hub.problem_delay
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.hub.set_problem_delay(value)
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_PROBLEM_DELAY_CHANGED, self.async_write_ha_state)
         )

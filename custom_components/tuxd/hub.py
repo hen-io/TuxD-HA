@@ -32,6 +32,7 @@ from .const import (
     SIGNAL_OFFLINE_UPDATE_URL_CHANGED,
     SIGNAL_ONLINE_SENSORS_ENABLED_CHANGED,
     SIGNAL_ONLINE_TIMEOUT_CHANGED,
+    SIGNAL_PROBLEM_DELAY_CHANGED,
     SIGNAL_REMOVE_ENTITY,
     SIGNAL_STATE_UPDATE,
     SIGNAL_THRESHOLDS_CHANGED,
@@ -104,6 +105,8 @@ class TuxdHub:
         self.master_password_hash = ""
         self._threshold_warnings = {}
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
+        self.problem_delay = 0
+        self._threshold_warning_since = {}
         self.last_seen_enabled = True
         self.online_sensors_enabled = True
         self.last_seen_update_interval = LAST_SEEN_UPDATE_INTERVAL_DEFAULT
@@ -131,6 +134,7 @@ class TuxdHub:
             if needs_timeout_migration:
                 online_timeout_raw = int(online_timeout_raw) * 60
             self.online_timeout = max(10, min(86400, int(online_timeout_raw)))
+            self.problem_delay = max(0, min(86400, int(stored.get("problem_delay", 0) or 0)))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", True))
             self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", True))
             self.last_seen_update_interval = max(1, min(3600, int(stored.get("last_seen_update_interval", LAST_SEEN_UPDATE_INTERVAL_DEFAULT))))
@@ -311,6 +315,7 @@ class TuxdHub:
             self.thresholds = dict(stored.get("thresholds", self.thresholds))
             self.master_password_hash = str(stored.get("master_password_hash", self.master_password_hash) or "")
             self.online_timeout = max(10, min(86400, int(stored.get("online_timeout", self.online_timeout))))
+            self.problem_delay = max(0, min(86400, int(stored.get("problem_delay", self.problem_delay) or 0)))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", self.last_seen_enabled))
             self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", self.online_sensors_enabled))
             self.last_seen_update_interval = max(1, min(3600, int(stored.get("last_seen_update_interval", self.last_seen_update_interval))))
@@ -323,6 +328,7 @@ class TuxdHub:
             "thresholds": self.thresholds,
             "master_password_hash": self.master_password_hash,
             "online_timeout": self.online_timeout,
+            "problem_delay": self.problem_delay,
             "online_timeout_is_seconds": True,
             "last_seen_enabled": self.last_seen_enabled,
             "online_sensors_enabled": self.online_sensors_enabled,
@@ -668,6 +674,10 @@ class TuxdHub:
                 except Exception:
                     pass
             else:
+                if entry.get("state") is None:
+                    entry["changed_at"] = 0.0
+                elif entry.get("state") != value:
+                    entry["changed_at"] = time.time()
                 entry["state"] = value
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
             if (entry.get("object_id") or "") in _THRESHOLD_OBJECT_IDS:
@@ -841,8 +851,26 @@ class TuxdHub:
         if text == self._threshold_warnings.get(device_id, ""):
             return
         self._threshold_warnings[device_id] = text
+        if text and device_id not in self._threshold_warning_since:
+            self._threshold_warning_since[device_id] = time.time()
+        elif not text:
+            self._threshold_warning_since.pop(device_id, None)
         for object_id in (WARNING_OBJECT_ID, WARNING_REASON_OBJECT_ID):
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=f"{device_id}_{object_id}"))
+
+    def problem_left(self, since):
+        if not self.problem_delay or not since:
+            return 0.0
+        return max(0.0, self.problem_delay - (time.time() - since))
+
+    def threshold_warning_since(self, device_id):
+        return self._threshold_warning_since.get(device_id, 0.0)
+
+    async def set_problem_delay(self, value):
+        self.problem_delay = max(0, min(86400, int(value)))
+        await self._persist()
+        async_dispatcher_send(self.hass, SIGNAL_PROBLEM_DELAY_CHANGED)
+        self._notify_stats_changed()
 
     async def set_online_timeout(self, value):
         self.online_timeout = max(10, min(86400, int(value)))
