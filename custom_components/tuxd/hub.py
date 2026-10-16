@@ -103,6 +103,7 @@ class TuxdHub:
         self.pending_devices = {}
         self.thresholds = {}
         self.master_password_hash = ""
+        self._guess_lock = None
         self._threshold_warnings = {}
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
         self.problem_delay = 0
@@ -409,6 +410,15 @@ class TuxdHub:
         if old_ws is not None and old_ws is not ws:
             self.hass.async_create_task(old_ws.close())
 
+    async def async_close_connections(self):
+        for info in list(self.devices.values()):
+            ws = info.get("ws")
+            if ws is not None:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+
     def async_device_disconnected(self, device_id, ws=None):
         current = self.devices.get(device_id, {}).get("ws")
         if ws is not None and current is not None and current is not ws:
@@ -517,9 +527,10 @@ class TuxdHub:
         return sorted({
             entry.get("device_id")
             for entry in self.entities.values()
-            if entry.get("domain") == "text"
-            and entry.get("object_id") == "terminal_input"
-            and entry.get("device_id") in self.devices
+            if entry.get("device_id") in self.devices and (
+                (entry.get("domain") == "text" and entry.get("object_id") == "terminal_input")
+                or (entry.get("object_id") == "terminal_output"
+                    and (entry.get("attributes") or {}).get("terminal_input") is True))
         })
 
 
@@ -710,7 +721,10 @@ class TuxdHub:
             return False
         if await self.hass.async_add_executor_job(verify_password, given, self.master_password_hash):
             return True
-        await asyncio.sleep(1.0)
+        if self._guess_lock is None:
+            self._guess_lock = asyncio.Lock()
+        async with self._guess_lock:
+            await asyncio.sleep(1.0)
         return False
 
     async def set_master_password(self, new_password):

@@ -91,6 +91,8 @@ class TuxdPictureView(HomeAssistantView):
         if len(data) > MAX_BYTES or not _IMAGE_TYPE.match(ctype.lower()):
             return web.Response(status=502)
         body = wrap(data, ctype)
+        if len(store["cache"]) >= 256:
+            store["cache"].clear()
         store["cache"][key] = body
         return self._reply(body)
 

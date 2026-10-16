@@ -117,7 +117,7 @@ class TuxdEntity(Entity):
     @property
     def device_info(self):
         dev = self._config.get("device") or {}
-        identifiers = dev.get("identifiers") or [self._entry.get("device_id")]
+        identifiers = [self._entry.get("device_id")]
         dev_reg = dr.async_get(self.hass)
         hub_device = dev_reg.async_get_device_by_identifier((DOMAIN, HUB_IDENTIFIER), self.hub.entry.entry_id)
         return DeviceInfo(

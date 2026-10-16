@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import voluptuous as vol
@@ -43,6 +44,37 @@ async def _ws_run(hass, connection, msg):
     connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    vol.Required("type"): "tuxd/action/run_multi",
+    vol.Required("device_ids"): [str],
+    vol.Required("integration"): str,
+    vol.Required("action"): str,
+    vol.Optional("target"): str,
+    vol.Optional("password"): str,
+    vol.Optional("master_password"): str,
+})
+@websocket_api.async_response
+async def _ws_run_multi(hass, connection, msg):
+    hub = _hub(hass)
+    if hub is None:
+        connection.send_result(msg["id"], {"ok": False, "error": "TuxD is not set up"})
+        return
+    given = msg.get("master_password")
+    if not await hub.check_master(given):
+        connection.send_result(msg["id"], {
+            "ok": False, "master": "incorrect" if given else "required",
+            "error": "Incorrect master password" if given else "Master password required",
+        })
+        return
+    device_ids = list(dict.fromkeys(msg["device_ids"]))
+    password = msg.get("password") or given
+    results = await asyncio.gather(*[
+        async_run_action(hass, d, msg["integration"], msg["action"], msg.get("target"), password) for d in device_ids
+    ])
+    connection.send_result(msg["id"], {"ok": all(r.get("ok") for r in results), "results": dict(zip(device_ids, results))})
+
+
 _SERVICE_SCHEMA = vol.Schema({
     vol.Required("device_id"): cv.string,
     vol.Required("integration"): cv.string,
@@ -55,6 +87,7 @@ _SERVICE_SCHEMA = vol.Schema({
 @callback
 def async_setup_actions(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_run)
+    websocket_api.async_register_command(hass, _ws_run_multi)
 
     async def _service(call: ServiceCall) -> None:
         data = call.data

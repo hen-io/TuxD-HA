@@ -71,7 +71,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        hub = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if hub is not None:
+            await hub.async_close_connections()
         ir.async_delete_issue(hass, DOMAIN, ISSUE_PENDING_DEVICES)
     return unloaded
 
