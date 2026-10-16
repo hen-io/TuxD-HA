@@ -59,6 +59,13 @@ def compute_suggested_object_id(config, device_id, object_id):
 
 _ITEM_COMPONENTS = ("TugBoat", "Docker", "Systemd", "Proxmox")
 
+
+def clashing_entity_ids(domain, device_name, name):
+    device, full = slugify(device_name or ""), slugify(name or "")
+    if not domain or not device or not full.startswith(f"{device}_"):
+        return None
+    return f"{domain}.{device}_{full}", f"{domain}.{device}_{full[len(device) + 1:]}"
+
 _READ_ONLY_ENTITY_CLASSES = frozenset({"TuxdSensor", "TuxdBinarySensor", "TuxdUpdate"})
 
 
@@ -70,6 +77,14 @@ class TuxdEntity(Entity):
     def __init__(self, hub, unique_id):
         self.hub = hub
         self._unique_id = unique_id
+        ids = self._clashing_ids()
+        if ids:
+            self.entity_id = ids[0]
+
+    def _clashing_ids(self):
+        entry = self._entry
+        device = (entry.get("config", {}).get("device") or {}).get("name") or entry.get("device_id")
+        return clashing_entity_ids(entry.get("domain"), device, (entry.get("config") or {}).get("name"))
 
     @property
     def _entry(self):
@@ -159,10 +174,14 @@ class TuxdEntity(Entity):
             if entry is None or not isinstance(name, str) or not name:
                 return
             device = str((self._config.get("device") or {}).get("name") or self._entry.get("device_id") or "")
-            heads = ([device] if device else []) + list(_ITEM_COMPONENTS)
-            outdated = bool(entry.name) and any(name.lower() == f"{head} {entry.name}".lower() for head in heads)
+            outdated = bool(entry.name) and bool(device) and name.lower() == f"{device} {entry.name}".lower()
+            outdated = outdated or (bool(entry.name) and any(
+                entry.name.lower() == f"{head} {name}".lower() for head in _ITEM_COMPONENTS))
             if entry.name is None or outdated:
                 registry.async_update_entity(self.entity_id, name=name)
+            ids = self._clashing_ids()
+            if ids and self.entity_id == ids[1] and registry.async_get(ids[0]) is None:
+                registry.async_update_entity(self.entity_id, new_entity_id=ids[0])
         except Exception:
             pass
 
