@@ -17,6 +17,7 @@ from .const import (
 )
 from .entity import TuxdEntity, async_setup_dynamic_platform
 from .const import ERROR_REASON_OBJECT_ID, WARNING_REASON_OBJECT_ID
+from .fleet import FleetProblemsMixin, host_reason, reason_text
 from .update import TuxdUpdate
 
 _DOMAIN_KEY = "sensor"
@@ -38,6 +39,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         TuxdDevicesWithUnhealthyStacksSensor(hub),
         TuxdFleetStackHealthSensor(hub),
         TuxdDevicesByVersionSensor(hub),
+        TuxdFleetReasonSensor(hub, "error"),
+        TuxdFleetReasonSensor(hub, "warning"),
         *[TuxdVmsOverThresholdSensor(hub, *row) for row in THRESHOLD_METRICS],
     ])
 
@@ -80,6 +83,24 @@ async def async_setup_entry(hass, entry, async_add_entities):
     )
 
 
+class TuxdFleetReasonSensor(FleetProblemsMixin, SensorEntity):
+
+    def __init__(self, hub, level):
+        self._init_problems(hub)
+        self.LEVEL = level
+        self._attr_unique_id = f"{DOMAIN}_hub_fleet_{level}_reason"
+        self._attr_name = f"TuxD {level.capitalize()} Reason"
+        self._attr_icon = "mdi:alert-circle-outline" if level == "error" else "mdi:alert-outline"
+
+    @property
+    def native_value(self):
+        return reason_text(self._problems())[:255]
+
+    @property
+    def extra_state_attributes(self):
+        return self._problem_attributes()
+
+
 class TuxdSensor(TuxdEntity, SensorEntity):
     @property
     def native_value(self):
@@ -87,11 +108,9 @@ class TuxdSensor(TuxdEntity, SensorEntity):
         object_id, device = self._entry.get("object_id"), self._entry.get("device_id")
         if object_id in (WARNING_REASON_OBJECT_ID, ERROR_REASON_OBJECT_ID):
             level = "warning" if object_id == WARNING_REASON_OBJECT_ID else "error"
-            offline = getattr(self.hub, "offline_alert", lambda *_a: "")(device, level)
-            over = self.hub.threshold_warning(device) if level == "warning" else ""
-            if over or offline:
-                own = "" if value in (None, "", "None", "unknown") else str(value)
-                return "; ".join(p for p in (offline, own, over) if p)[:255]
+            reason = host_reason(self.hub, device, level, own=value)
+            if reason:
+                return reason
         if isinstance(value, str):
             device_class = self._config.get("device_class")
             if device_class == "timestamp":

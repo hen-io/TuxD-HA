@@ -47,6 +47,7 @@ from .const import (
 )
 
 _THRESHOLD_OBJECT_IDS = frozenset(oid for row in THRESHOLD_METRICS for oid in threshold_sources(row[0]))
+_REASON_FLAGS = {WARNING_REASON_OBJECT_ID: WARNING_OBJECT_ID, ERROR_REASON_OBJECT_ID: ERROR_OBJECT_ID}
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -709,6 +710,9 @@ class TuxdHub:
                     entry["changed_at"] = time.time()
                 entry["state"] = value
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=uid))
+            flag = _REASON_FLAGS.get(entry.get("object_id"))
+            if flag:
+                async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=f"{device_id}_{flag}"))
             if (entry.get("object_id") or "") in _THRESHOLD_OBJECT_IDS:
                 self._refresh_threshold_warning(device_id)
             if _is_stats_relevant_object_id(entry.get("object_id") or ""):
