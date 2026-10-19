@@ -74,6 +74,11 @@ def threshold_sources(key):
 
 WARNING_OBJECT_ID = "system_warning"
 WARNING_REASON_OBJECT_ID = "system_warning_reason"
+ERROR_OBJECT_ID = "system_error"
+ERROR_REASON_OBJECT_ID = "system_error_reason"
+
+OFFLINE_LEVELS = ("off", "warning", "error")
+OFFLINE_REASON = "Agent is offline"
 
 PLATFORMS = [
     "sensor",

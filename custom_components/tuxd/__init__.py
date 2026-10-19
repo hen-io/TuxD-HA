@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
@@ -7,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.event import async_track_time_interval
 
 from .actions import async_setup_actions
 from .config_editor import async_setup_config_editor
@@ -28,6 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub = TuxdHub(hass, entry)
     await hub.async_load()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
+    entry.async_on_unload(async_track_time_interval(hass, hub.refresh_offline, timedelta(seconds=15)))
 
     dev_reg = dr.async_get(hass)
     dev_reg.async_get_or_create(

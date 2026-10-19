@@ -18,9 +18,14 @@ from .const import (
 )
 from homeassistant.helpers.event import async_call_later
 from .entity import TuxdEntity, async_setup_dynamic_platform
-from .const import WARNING_OBJECT_ID
+from .const import ERROR_OBJECT_ID, WARNING_OBJECT_ID
 
 _DOMAIN_KEY = "binary_sensor"
+
+
+def _offline(hub, device_id, level):
+    check = getattr(hub, "offline_alert", None)
+    return check(device_id, level) if check else ""
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -73,7 +78,10 @@ class TuxdBinarySensor(TuxdEntity, BinarySensorEntity):
     def is_on(self):
         state = self._entry.get("state")
         payload_on = self._config.get("payload_on", "ON")
-        if self._entry.get("object_id") == WARNING_OBJECT_ID and self.hub.threshold_warning(self._entry.get("device_id")):
+        object_id, device = self._entry.get("object_id"), self._entry.get("device_id")
+        if object_id == WARNING_OBJECT_ID and (self.hub.threshold_warning(device) or _offline(self.hub, device, "warning")):
+            return True
+        if object_id == ERROR_OBJECT_ID and _offline(self.hub, device, "error"):
             return True
         return state == payload_on
 
@@ -168,11 +176,20 @@ class TuxdFleetErrorBinarySensor(BinarySensorEntity):
             e.get("device_id"): e.get("state")
             for e in self.hub.entities.values() if e.get("object_id") == "system_error_reason"
         }
-        return {
+        errors = {
             e.get("device_id"): reasons.get(e.get("device_id")) or ""
             for e in self.hub.entities.values()
             if e.get("object_id") == "system_error" and e.get("state") == "ON" and self._lasted(e.get("changed_at"))
         }
+        return self._add_offline(errors, "error")
+
+    def _add_offline(self, problems, level):
+        for device_id in list(getattr(self.hub, "device_keys", {}) or {}):
+            reason = _offline(self.hub, device_id, level)
+            if reason and self._lasted(self.hub.offline_since(device_id)):
+                own = problems.get(device_id) or ""
+                problems[device_id] = "; ".join(p for p in (own, reason) if p and p not in ("None", "unknown"))
+        return problems
 
     @property
     def is_on(self):
@@ -225,7 +242,7 @@ class TuxdFleetWarningBinarySensor(TuxdFleetErrorBinarySensor):
                 own = reasons.get(device) if own_on else ""
                 own = "" if own in (None, "None", "unknown") else own
                 warnings[device] = "; ".join(p for p in (own, over) if p)
-        return warnings
+        return self._add_offline(warnings, "warning")
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

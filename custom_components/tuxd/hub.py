@@ -37,6 +37,10 @@ from .const import (
     SIGNAL_STATE_UPDATE,
     SIGNAL_THRESHOLDS_CHANGED,
     THRESHOLD_METRICS,
+    ERROR_OBJECT_ID,
+    ERROR_REASON_OBJECT_ID,
+    OFFLINE_LEVELS,
+    OFFLINE_REASON,
     WARNING_OBJECT_ID,
     WARNING_REASON_OBJECT_ID,
     threshold_sources,
@@ -79,6 +83,13 @@ class _HeadlessTtyCollector:
             self.exit_event.set()
 
 
+def _clean_offline_alerts(value):
+    value = value if isinstance(value, dict) else {}
+    default = value.get("default") if value.get("default") in OFFLINE_LEVELS else "off"
+    devices = value.get("devices") if isinstance(value.get("devices"), dict) else {}
+    return {"default": default, "devices": {str(k): v for k, v in devices.items() if v in OFFLINE_LEVELS}}
+
+
 def _is_stats_relevant_object_id(object_id):
     object_id = object_id or ""
     return (
@@ -108,6 +119,9 @@ class TuxdHub:
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
         self.problem_delay = 0
         self._threshold_warning_since = {}
+        self.offline_alerts = {"default": "off", "devices": {}}
+        self._offline = {}
+        self._started_at = time.time()
         self.last_seen_enabled = True
         self.online_sensors_enabled = True
         self.last_seen_update_interval = LAST_SEEN_UPDATE_INTERVAL_DEFAULT
@@ -136,6 +150,7 @@ class TuxdHub:
                 online_timeout_raw = int(online_timeout_raw) * 60
             self.online_timeout = max(10, min(86400, int(online_timeout_raw)))
             self.problem_delay = max(0, min(86400, int(stored.get("problem_delay", 0) or 0)))
+            self.offline_alerts = _clean_offline_alerts(stored.get("offline_alerts"))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", True))
             self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", True))
             self.last_seen_update_interval = max(1, min(3600, int(stored.get("last_seen_update_interval", LAST_SEEN_UPDATE_INTERVAL_DEFAULT))))
@@ -317,6 +332,7 @@ class TuxdHub:
             self.master_password_hash = str(stored.get("master_password_hash", self.master_password_hash) or "")
             self.online_timeout = max(10, min(86400, int(stored.get("online_timeout", self.online_timeout))))
             self.problem_delay = max(0, min(86400, int(stored.get("problem_delay", self.problem_delay) or 0)))
+            self.offline_alerts = _clean_offline_alerts(stored.get("offline_alerts", self.offline_alerts))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", self.last_seen_enabled))
             self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", self.online_sensors_enabled))
             self.last_seen_update_interval = max(1, min(3600, int(stored.get("last_seen_update_interval", self.last_seen_update_interval))))
@@ -330,6 +346,7 @@ class TuxdHub:
             "master_password_hash": self.master_password_hash,
             "online_timeout": self.online_timeout,
             "problem_delay": self.problem_delay,
+            "offline_alerts": self.offline_alerts,
             "online_timeout_is_seconds": True,
             "last_seen_enabled": self.last_seen_enabled,
             "online_sensors_enabled": self.online_sensors_enabled,
@@ -364,6 +381,7 @@ class TuxdHub:
             self._reconcile_device_entities(device_id, self._device_generation[device_id])
         )
 
+        self.refresh_offline()
         self._notify_stats_changed()
 
     async def _reconcile_device_entities(self, device_id, generation):
@@ -886,10 +904,50 @@ class TuxdHub:
         async_dispatcher_send(self.hass, SIGNAL_PROBLEM_DELAY_CHANGED)
         self._notify_stats_changed()
 
+
+    def offline_level(self, device_id):
+        level = (self.offline_alerts.get("devices") or {}).get(device_id) or self.offline_alerts.get("default")
+        return level if level in OFFLINE_LEVELS else "off"
+
+    def offline_alert(self, device_id, level):
+        return OFFLINE_REASON if device_id in self._offline and self.offline_level(device_id) == level else ""
+
+    def offline_since(self, device_id):
+        return self._offline.get(device_id, 0.0)
+
+    def refresh_offline(self, *_args):
+        now = time.time()
+        current = {}
+        for device_id in self.device_keys:
+            if device_id in self.devices:
+                continue
+            last = self.device_last_seen.get(device_id)
+            base = last.timestamp() if last else self._started_at
+            if now - base >= self.online_timeout:
+                current[device_id] = self._offline.get(device_id) or base + self.online_timeout
+        changed = set(current) ^ set(self._offline)
+        self._offline = current
+        for device_id in changed:
+            self._dispatch_problem_entities(device_id)
+        if changed:
+            self._notify_stats_changed()
+
+    def _dispatch_problem_entities(self, device_id):
+        for object_id in (ERROR_OBJECT_ID, ERROR_REASON_OBJECT_ID, WARNING_OBJECT_ID, WARNING_REASON_OBJECT_ID):
+            async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=f"{device_id}_{object_id}"))
+
+    async def set_offline_alerts(self, default, devices):
+        self.offline_alerts = _clean_offline_alerts({"default": default, "devices": devices})
+        await self._persist()
+        for device_id in list(self._offline):
+            self._dispatch_problem_entities(device_id)
+        self._notify_stats_changed()
+
     async def set_online_timeout(self, value):
         self.online_timeout = max(10, min(86400, int(value)))
         await self._persist()
         async_dispatcher_send(self.hass, SIGNAL_ONLINE_TIMEOUT_CHANGED)
+        self.refresh_offline()
 
     async def set_last_seen_update_interval(self, value):
         self.last_seen_update_interval = max(1, min(3600, int(value)))

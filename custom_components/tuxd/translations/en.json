@@ -28,6 +28,7 @@
           "run_command": "Run terminal command",
           "agent_password": "Set agent password",
           "master_password": "Set master password",
+          "offline_alerts": "Offline alerts",
           "restore_entity_ids": "Restore entity IDs",
           "manual_key": "Set a specific key"
         }
@@ -106,6 +107,13 @@
           "new_password": "New master password",
           "confirm_password": "New master password again",
           "remove": "Remove the master password"
+        }
+      },
+      "offline_alerts": {
+        "title": "Offline alerts",
+        "description": "What an agent raises while it is offline (not seen for the online timeout): nothing, a warning or an error. It turns on that agent's own warning or error sensor (reason: Agent is offline) and the fleet-wide TuxD Warning / TuxD Error sensors; the Problem Delay applies. Set a default for all agents, and per agent use the default or its own level.",
+        "data": {
+          "default": "Default for all agents"
         }
       },
       "manual_key": {

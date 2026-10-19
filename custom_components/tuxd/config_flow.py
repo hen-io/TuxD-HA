@@ -7,7 +7,7 @@ from homeassistant import config_entries
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import selector
 
-from .const import DOMAIN
+from .const import DOMAIN, OFFLINE_LEVELS
 
 
 class TuxdConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -72,6 +72,8 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             menu_options.append("config")
             menu_options.append("agent_password")
         menu_options.append("master_password")
+        if hub.device_keys:
+            menu_options.append("offline_alerts")
         if hub.terminal_enabled_devices():
             menu_options.append("run_command")
         if hub.device_keys:
@@ -320,6 +322,26 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         if hub.master_required():
             fields[vol.Optional("remove", default=False)] = bool
         return self.async_show_form(step_id="master_password", data_schema=vol.Schema(fields), errors=errors or {})
+
+    async def async_step_offline_alerts(self, user_input=None):
+        hub = self._hub()
+        devices = sorted(hub.device_keys)
+        if user_input is not None:
+            own = {d: user_input[d] for d in devices if user_input.get(d) in OFFLINE_LEVELS}
+            await hub.set_offline_alerts(user_input.get("default", "off"), own)
+            return self.async_create_entry(title="", data={})
+
+        def levels(with_default):
+            options = [selector.SelectOptionDict(value="default", label="Use default")] if with_default else []
+            options += [selector.SelectOptionDict(value=v, label=label)
+                        for v, label in (("off", "Off"), ("warning", "Warning"), ("error", "Error"))]
+            return selector.SelectSelector(selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN))
+
+        current = hub.offline_alerts
+        fields = {vol.Required("default", default=current.get("default", "off")): levels(False)}
+        for device_id in devices:
+            fields[vol.Required(device_id, default=current.get("devices", {}).get(device_id, "default"))] = levels(True)
+        return self.async_show_form(step_id="offline_alerts", data_schema=vol.Schema(fields))
 
     async def async_step_run_command_result(self, user_input=None, results=None):
         if results is not None:

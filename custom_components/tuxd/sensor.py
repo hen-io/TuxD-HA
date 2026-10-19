@@ -16,7 +16,7 @@ from .const import (
     THRESHOLD_METRICS,
 )
 from .entity import TuxdEntity, async_setup_dynamic_platform
-from .const import WARNING_REASON_OBJECT_ID
+from .const import ERROR_REASON_OBJECT_ID, WARNING_REASON_OBJECT_ID
 from .update import TuxdUpdate
 
 _DOMAIN_KEY = "sensor"
@@ -84,11 +84,14 @@ class TuxdSensor(TuxdEntity, SensorEntity):
     @property
     def native_value(self):
         value = self._entry.get("state")
-        if self._entry.get("object_id") == WARNING_REASON_OBJECT_ID:
-            over = self.hub.threshold_warning(self._entry.get("device_id"))
-            if over:
+        object_id, device = self._entry.get("object_id"), self._entry.get("device_id")
+        if object_id in (WARNING_REASON_OBJECT_ID, ERROR_REASON_OBJECT_ID):
+            level = "warning" if object_id == WARNING_REASON_OBJECT_ID else "error"
+            offline = getattr(self.hub, "offline_alert", lambda *_a: "")(device, level)
+            over = self.hub.threshold_warning(device) if level == "warning" else ""
+            if over or offline:
                 own = "" if value in (None, "", "None", "unknown") else str(value)
-                return "; ".join(p for p in (own, over) if p)[:255]
+                return "; ".join(p for p in (offline, own, over) if p)[:255]
         if isinstance(value, str):
             device_class = self._config.get("device_class")
             if device_class == "timestamp":
@@ -211,9 +214,11 @@ class TuxdDevicesWithErrorsSensor(TuxdHubStatSensor):
         super().__init__(hub, "devices_with_errors", "TuxD Devices With Errors", "mdi:alert-circle-outline")
 
     def _device_ids(self):
+        offline_error = getattr(self.hub, "offline_alert", lambda *_a: "")
         return sorted({
             e.get("device_id") for e in self.hub.entities.values()
-            if e.get("object_id") == "system_error" and e.get("state") == "ON"
+            if e.get("object_id") == "system_error"
+            and (e.get("state") == "ON" or offline_error(e.get("device_id"), "error"))
         })
 
     @property
