@@ -37,6 +37,7 @@ from .const import (
     SIGNAL_STATE_UPDATE,
     SIGNAL_THRESHOLDS_CHANGED,
     THRESHOLD_METRICS,
+    ALERT_CATEGORIES,
     ERROR_OBJECT_ID,
     ERROR_REASON_OBJECT_ID,
     OFFLINE_LEVELS,
@@ -84,6 +85,42 @@ class _HeadlessTtyCollector:
             self.exit_event.set()
 
 
+_CATEGORY_KEYS = tuple(key for key, _label in ALERT_CATEGORIES)
+
+
+def _track_source_since(entry, attrs):
+    sources = attrs.get("sources") if isinstance(attrs, dict) else None
+    sources = sources if isinstance(sources, dict) else {}
+    known = entry.get("source_since")
+    first = known is None
+    known = known or {}
+    now = time.time()
+    entry["source_since"] = {key: known.get(key, 0.0 if first else now) for key in sources}
+
+
+def _clean_global_alerts(value, old_problem_delay=None):
+    value = value if isinstance(value, dict) else {}
+
+    def seconds(key):
+        raw = value.get(key, old_problem_delay)
+        try:
+            return max(0, min(86400, int(raw or 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    def kinds(raw):
+        return [k for k in _CATEGORY_KEYS if k in raw] if isinstance(raw, (list, tuple, set)) else None
+
+    default = kinds(value.get("default"))
+    devices = value.get("devices") if isinstance(value.get("devices"), dict) else {}
+    return {
+        "warning_delay": seconds("warning_delay"),
+        "error_delay": seconds("error_delay"),
+        "default": list(_CATEGORY_KEYS) if default is None else default,
+        "devices": {str(d): k for d, k in ((d, kinds(v)) for d, v in devices.items()) if k is not None},
+    }
+
+
 def _clean_offline_alerts(value):
     value = value if isinstance(value, dict) else {}
     default = value.get("default") if value.get("default") in OFFLINE_LEVELS else "off"
@@ -118,7 +155,7 @@ class TuxdHub:
         self._guess_lock = None
         self._threshold_warnings = {}
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
-        self.problem_delay = 0
+        self.global_alerts = _clean_global_alerts(None)
         self._threshold_warning_since = {}
         self.offline_alerts = {"default": "off", "devices": {}}
         self._offline = {}
@@ -150,7 +187,7 @@ class TuxdHub:
             if needs_timeout_migration:
                 online_timeout_raw = int(online_timeout_raw) * 60
             self.online_timeout = max(10, min(86400, int(online_timeout_raw)))
-            self.problem_delay = max(0, min(86400, int(stored.get("problem_delay", 0) or 0)))
+            self.global_alerts = _clean_global_alerts(stored.get("global_alerts"), stored.get("problem_delay"))
             self.offline_alerts = _clean_offline_alerts(stored.get("offline_alerts"))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", True))
             self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", True))
@@ -332,7 +369,7 @@ class TuxdHub:
             self.thresholds = dict(stored.get("thresholds", self.thresholds))
             self.master_password_hash = str(stored.get("master_password_hash", self.master_password_hash) or "")
             self.online_timeout = max(10, min(86400, int(stored.get("online_timeout", self.online_timeout))))
-            self.problem_delay = max(0, min(86400, int(stored.get("problem_delay", self.problem_delay) or 0)))
+            self.global_alerts = _clean_global_alerts(stored.get("global_alerts", self.global_alerts), stored.get("problem_delay"))
             self.offline_alerts = _clean_offline_alerts(stored.get("offline_alerts", self.offline_alerts))
             self.last_seen_enabled = bool(stored.get("last_seen_enabled", self.last_seen_enabled))
             self.online_sensors_enabled = bool(stored.get("online_sensors_enabled", self.online_sensors_enabled))
@@ -346,7 +383,7 @@ class TuxdHub:
             "thresholds": self.thresholds,
             "master_password_hash": self.master_password_hash,
             "online_timeout": self.online_timeout,
-            "problem_delay": self.problem_delay,
+            "global_alerts": self.global_alerts,
             "offline_alerts": self.offline_alerts,
             "online_timeout_is_seconds": True,
             "last_seen_enabled": self.last_seen_enabled,
@@ -700,9 +737,13 @@ class TuxdHub:
             cfg = entry.get("config", {})
             if cfg.get("json_attributes_topic") == key:
                 try:
-                    entry["attributes"] = json.loads(value)
+                    attrs = json.loads(value)
                 except Exception:
-                    pass
+                    attrs = None
+                if attrs is not None:
+                    if entry.get("object_id") in (WARNING_OBJECT_ID, ERROR_OBJECT_ID):
+                        _track_source_since(entry, attrs)
+                    entry["attributes"] = attrs
             else:
                 if entry.get("state") is None:
                     entry["changed_at"] = 0.0
@@ -894,16 +935,26 @@ class TuxdHub:
         for object_id in (WARNING_OBJECT_ID, WARNING_REASON_OBJECT_ID):
             async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATE.format(unique_id=f"{device_id}_{object_id}"))
 
-    def problem_left(self, since):
-        if not self.problem_delay or not since:
+    def problem_delay(self, level):
+        return self.global_alerts[f"{level}_delay"]
+
+    def problem_left(self, since, level="error"):
+        delay = self.problem_delay(level)
+        if not delay or not since:
             return 0.0
-        return max(0.0, self.problem_delay - (time.time() - since))
+        return max(0.0, delay - (time.time() - since))
+
+    def alert_categories(self, device_id):
+        own = self.global_alerts["devices"].get(device_id)
+        return set(own if own is not None else self.global_alerts["default"])
 
     def threshold_warning_since(self, device_id):
         return self._threshold_warning_since.get(device_id, 0.0)
 
-    async def set_problem_delay(self, value):
-        self.problem_delay = max(0, min(86400, int(value)))
+    async def set_global_alerts(self, warning_delay, error_delay, default, devices):
+        self.global_alerts = _clean_global_alerts({
+            "warning_delay": warning_delay, "error_delay": error_delay, "default": default, "devices": devices,
+        })
         await self._persist()
         async_dispatcher_send(self.hass, SIGNAL_PROBLEM_DELAY_CHANGED)
         self._notify_stats_changed()

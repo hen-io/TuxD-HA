@@ -28,6 +28,7 @@
           "run_command": "Run terminal command",
           "agent_password": "Set agent password",
           "master_password": "Set master password",
+          "global_alerts": "Global alerts",
           "offline_alerts": "Offline alerts",
           "restore_entity_ids": "Restore entity IDs",
           "manual_key": "Set a specific key"
@@ -109,6 +110,15 @@
           "remove": "Remove the master password"
         }
       },
+      "global_alerts": {
+        "title": "Global alerts",
+        "description": "What reaches the fleet-wide TuxD Warning / TuxD Error sensors (and their reason sensors). A warning or an error counts only once it has been active for its delay, and only the kinds picked: a default for all agents, and below it each agent's own (an agent left on the default follows it). Each agent's own warning and error sensors always show everything.",
+        "data": {
+          "warning_delay": "Warnings count after (seconds active)",
+          "error_delay": "Errors count after (seconds active)",
+          "default": "Kinds that count - default for all agents"
+        }
+      },
       "offline_alerts": {
         "title": "Offline alerts",
         "description": "What an agent raises while it is offline (not seen for the online timeout): nothing, a warning or an error. It turns on that agent's own warning or error sensor (reason: Agent is offline) and the fleet-wide TuxD Warning / TuxD Error sensors; the Problem Delay applies. Set a default for all agents, and per agent use the default or its own level.",
@@ -150,7 +160,11 @@
       "password_incorrect": "Incorrect password.",
       "password_empty": "Enter the new password (or tick Remove).",
       "password_mismatch": "The two new passwords are not the same.",
-      "master_incorrect": "Incorrect master password."
+      "master_incorrect": "Incorrect master password.",
+      "config_failed": "{error}"
+    },
+    "abort": {
+      "config_failed": "Could not read the configuration of {device}: {error}"
     }
   },
   "issues": {

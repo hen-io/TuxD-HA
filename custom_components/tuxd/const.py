@@ -80,6 +80,28 @@ ERROR_REASON_OBJECT_ID = "system_error_reason"
 OFFLINE_LEVELS = ("off", "warning", "error")
 OFFLINE_REASON = "Agent is offline"
 
+ALERT_CATEGORIES = (
+    ("thresholds", "Fleet thresholds (CPU, RAM, network, IO wait, root storage, load)"),
+    ("offline", "Agent offline"),
+    ("stacks", "Stacks (TugBoat, Docker)"),
+    ("services", "Services (systemd, Windows)"),
+    ("guests", "Proxmox guests"),
+    ("disk", "Root storage full"),
+    ("agent", "Agent problems (anything else the agent reports)"),
+)
+_SOURCE_CATEGORIES = {
+    "tugboat_stacks": "stacks",
+    "docker_stacks": "stacks",
+    "systemd_services": "services",
+    "windows_services": "services",
+    "proxmox_guests": "guests",
+    "root_full": "disk",
+}
+
+
+def alert_category(source_key):
+    return _SOURCE_CATEGORIES.get(source_key, "agent")
+
 PLATFORMS = [
     "sensor",
     "binary_sensor",

@@ -13,6 +13,7 @@ from .const import (
     SIGNAL_THRESHOLDS_CHANGED,
     WARNING_OBJECT_ID,
     WARNING_REASON_OBJECT_ID,
+    alert_category,
 )
 
 _EMPTY = (None, "", "None", "unknown", "unavailable")
@@ -57,11 +58,15 @@ class FleetProblemsMixin:
         return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
 
     def _lasted(self, since):
-        left = self.hub.problem_left(since) if hasattr(self.hub, "problem_left") else 0.0
+        left = self.hub.problem_left(since, self.LEVEL) if hasattr(self.hub, "problem_left") else 0.0
         if left > 0:
             self._next_due = left if self._next_due is None else min(self._next_due, left)
             return False
         return True
+
+    def _counts(self, device, kind):
+        kinds = getattr(self.hub, "alert_categories", None)
+        return kinds is None or kind in kinds(device)
 
     def _problems(self):
         flag, reason_oid = (
@@ -74,22 +79,37 @@ class FleetProblemsMixin:
             if e.get("object_id") != flag:
                 continue
             device = e.get("device_id")
-            over = _threshold(self.hub, device) if self.LEVEL == "warning" else ""
-            if over and not self._lasted(self.hub.threshold_warning_since(device) if hasattr(self.hub, "threshold_warning_since") else 0):
-                over = ""
-            own_on = e.get("state") == "ON" and self._lasted(e.get("changed_at"))
-            if own_on or over:
-                own = reasons.get(device) if own_on else ""
-                problems[device] = "; ".join(p for p in ("" if own in _EMPTY else own, over) if p)
+            parts, hit = [], False
+            if e.get("state") == "ON":
+                sources = (e.get("attributes") or {}).get("sources")
+                if isinstance(sources, dict) and sources:
+                    since = e.get("source_since") or {}
+                    for key, text in sources.items():
+                        if self._counts(device, alert_category(key)) and self._lasted(since.get(key, e.get("changed_at"))):
+                            hit = True
+                            parts.append("" if text in _EMPTY else str(text))
+                elif self._counts(device, "agent") and self._lasted(e.get("changed_at")):
+                    hit = True
+                    own = reasons.get(device)
+                    parts.append("" if own in _EMPTY else str(own))
+            if self.LEVEL == "warning" and self._counts(device, "thresholds"):
+                over = _threshold(self.hub, device)
+                since = self.hub.threshold_warning_since(device) if hasattr(self.hub, "threshold_warning_since") else 0
+                if over and self._lasted(since):
+                    hit = True
+                    parts.append(over)
+            if hit:
+                problems[device] = "; ".join(p for p in parts if p)
         for device in list(getattr(self.hub, "device_keys", {}) or {}):
             offline = _offline(self.hub, device, self.LEVEL)
-            if offline and self._lasted(self.hub.offline_since(device)):
+            if offline and self._counts(device, "offline") and self._lasted(self.hub.offline_since(device)):
                 problems[device] = "; ".join(p for p in (offline, problems.get(device)) if p)
         return problems
 
     def _problem_attributes(self):
         problems = self._problems()
-        return {"devices": sorted(problems), "reasons": problems, "reason": reason_text(problems)}
+        delay = self.hub.problem_delay(self.LEVEL) if callable(getattr(self.hub, "problem_delay", None)) else 0
+        return {"devices": sorted(problems), "reasons": problems, "reason": reason_text(problems), "delay": delay}
 
     @callback
     def _refresh(self, *_args):

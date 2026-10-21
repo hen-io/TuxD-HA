@@ -7,7 +7,7 @@ from homeassistant import config_entries
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import selector
 
-from .const import DOMAIN, OFFLINE_LEVELS
+from .const import ALERT_CATEGORIES, DOMAIN, OFFLINE_LEVELS
 
 
 class TuxdConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -72,6 +72,7 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             menu_options.append("config")
             menu_options.append("agent_password")
         menu_options.append("master_password")
+        menu_options.append("global_alerts")
         if hub.device_keys:
             menu_options.append("offline_alerts")
         if hub.terminal_enabled_devices():
@@ -176,26 +177,32 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
 
         password = getattr(self, "_config_password", None)
         if user_input is not None:
-            result = await hub.async_set_device_config(device_id, user_input.get("yaml", ""), password)
-            if not result.get("ok"):
-                return await self.async_step_config(errors={"base": result.get("error", "Could not save configuration")})
-            return self.async_create_entry(title="", data={})
+            text = user_input.get("yaml", "")
+            result = await hub.async_set_device_config(device_id, text, password)
+            if result.get("ok"):
+                return self.async_create_entry(title="", data={})
+            if result.get("auth"):
+                return await self.async_step_config_device(errors={"password": f"password_{result['auth']}"})
+            return self._config_form(device_id, text, result.get("error") or "Could not save the configuration")
 
         result = await hub.async_get_device_config(device_id, password)
         if result.get("auth"):
             return await self.async_step_config_device(errors={"password": f"password_{result['auth']}"})
         if not result.get("ok"):
-            return await self.async_step_config(errors={"base": result.get("error", "Could not read configuration")})
+            return self.async_abort(reason="config_failed", description_placeholders={
+                "device": device_id, "error": result.get("error") or "Could not read the configuration",
+            })
         self._config_content = result.get("content", "")
+        return self._config_form(device_id, self._config_content)
+
+    def _config_form(self, device_id, text, error=None):
         return self.async_show_form(
             step_id="config",
             data_schema=vol.Schema({
-                vol.Required("yaml", default=self._config_content): selector.TextSelector(
-                    selector.TextSelectorConfig(multiline=True)
-                ),
+                vol.Required("yaml", default=text): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
             }),
-            errors=errors or {},
-            description_placeholders={"device": device_id},
+            errors={"base": "config_failed"} if error else {},
+            description_placeholders={"device": device_id, "error": error or ""},
         )
 
     async def async_step_config_device(self, user_input=None, errors=None):
@@ -322,6 +329,38 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
         if hub.master_required():
             fields[vol.Optional("remove", default=False)] = bool
         return self.async_show_form(step_id="master_password", data_schema=vol.Schema(fields), errors=errors or {})
+
+    async def async_step_global_alerts(self, user_input=None):
+        hub = self._hub()
+        devices = sorted(hub.device_keys)
+        current = hub.global_alerts
+        if user_input is not None:
+            default = list(user_input.get("default") or [])
+            old_default = sorted(current["default"])
+            own = {}
+            for d in devices:
+                picked = sorted(user_input.get(d) or [])
+                had_own = d in current["devices"]
+                if picked != sorted(default) and (had_own or picked != old_default):
+                    own[d] = picked
+            await hub.set_global_alerts(user_input.get("warning_delay", 0), user_input.get("error_delay", 0), default, own)
+            return self.async_create_entry(title="", data={})
+
+        kinds = selector.SelectSelector(selector.SelectSelectorConfig(
+            options=[selector.SelectOptionDict(value=k, label=label) for k, label in ALERT_CATEGORIES],
+            multiple=True, mode=selector.SelectSelectorMode.LIST,
+        ))
+        seconds = selector.NumberSelector(selector.NumberSelectorConfig(
+            min=0, max=86400, step=1, unit_of_measurement="s", mode=selector.NumberSelectorMode.BOX,
+        ))
+        fields = {
+            vol.Required("warning_delay", default=current["warning_delay"]): seconds,
+            vol.Required("error_delay", default=current["error_delay"]): seconds,
+            vol.Optional("default", default=current["default"]): kinds,
+        }
+        for device_id in devices:
+            fields[vol.Optional(device_id, default=sorted(hub.alert_categories(device_id)))] = kinds
+        return self.async_show_form(step_id="global_alerts", data_schema=vol.Schema(fields))
 
     async def async_step_offline_alerts(self, user_input=None):
         hub = self._hub()
