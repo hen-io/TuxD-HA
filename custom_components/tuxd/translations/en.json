@@ -111,7 +111,7 @@
       },
       "alerts": {
         "title": "Alerts",
-        "description": "Warnings and errors. Offline: what an agent raises while it is offline (not seen for the online timeout) - nothing, a warning or an error, on its own sensors (reason: Agent is offline) and the fleet's. Fleet: what reaches the TuxD Warning / TuxD Error sensors (and their reason sensors) - a warning or an error only once it has been active for its delay, and only the kinds picked. Each has a default for all agents; below them every agent's own (\"<agent> · offline\" and \"<agent> · kinds\") - an agent left on the default follows it. The agents' own warning and error sensors always show everything.",
+        "description": "Warnings and errors. Offline: what an agent raises while it is offline (not seen for the online timeout) - nothing, a warning or an error, on its own sensors (reason: Agent is offline) and the fleet's. Fleet: what reaches the TuxD Warning / TuxD Error sensors (and their reason sensors) - a warning or an error only once it has been active for its delay, and only the kinds picked. Each has a default for all agents; below them every agent's own (the agent's name, then · offline and · kinds) - an agent left on the default follows it. The agents' own warning and error sensors always show everything.",
         "data": {
           "warning_delay": "Warnings reach the fleet after (seconds active)",
           "error_delay": "Errors reach the fleet after (seconds active)",
@@ -185,7 +185,7 @@
   "services": {
     "run_action": {
       "name": "Run a TuxD action",
-      "description": "Runs one of an agent's actions (its sensor.<host>_actions lists them): TuxD's own, or an integration's such as systemd or TugBoat.",
+      "description": "Runs one of an agent's actions (its sensor.HOST_actions lists them): TuxD's own, or an integration's such as systemd or TugBoat.",
       "fields": {
         "device_id": {
           "name": "Device",
