@@ -80,8 +80,9 @@ ERROR_REASON_OBJECT_ID = "system_error_reason"
 OFFLINE_LEVELS = ("off", "warning", "error")
 OFFLINE_REASON = "Agent is offline"
 
-ALERT_CATEGORIES = (
-    ("thresholds", "Fleet thresholds (CPU, RAM, network, IO wait, root storage, load)"),
+ALERT_CATEGORIES = tuple(
+    (f"threshold_{key}", f"Threshold: {name}") for key, name, *_rest in THRESHOLD_METRICS
+) + (
     ("offline", "Agent offline"),
     ("stacks", "Stacks (TugBoat, Docker)"),
     ("services", "Services (systemd, Windows)"),

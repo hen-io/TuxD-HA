@@ -72,9 +72,7 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             menu_options.append("config")
             menu_options.append("agent_password")
         menu_options.append("master_password")
-        menu_options.append("global_alerts")
-        if hub.device_keys:
-            menu_options.append("offline_alerts")
+        menu_options.append("alerts")
         if hub.terminal_enabled_devices():
             menu_options.append("run_command")
         if hub.device_keys:
@@ -330,45 +328,31 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
             fields[vol.Optional("remove", default=False)] = bool
         return self.async_show_form(step_id="master_password", data_schema=vol.Schema(fields), errors=errors or {})
 
-    async def async_step_global_alerts(self, user_input=None):
+    async def async_step_alerts(self, user_input=None):
         hub = self._hub()
         devices = sorted(hub.device_keys)
-        current = hub.global_alerts
+        alerts, offline = hub.global_alerts, hub.offline_alerts
+        offline_key = lambda d: f"{d} · offline"
+        kinds_key = lambda d: f"{d} · kinds"
         if user_input is not None:
-            default = list(user_input.get("default") or [])
-            old_default = sorted(current["default"])
-            own = {}
+            default = list(user_input.get("default_kinds") or [])
+            old_default = sorted(alerts["default"])
+            own_kinds = {}
             for d in devices:
-                picked = sorted(user_input.get(d) or [])
-                had_own = d in current["devices"]
-                if picked != sorted(default) and (had_own or picked != old_default):
-                    own[d] = picked
-            await hub.set_global_alerts(user_input.get("warning_delay", 0), user_input.get("error_delay", 0), default, own)
+                picked = sorted(user_input.get(kinds_key(d)) or [])
+                if picked != sorted(default) and (d in alerts["devices"] or picked != old_default):
+                    own_kinds[d] = picked
+            own_offline = {d: user_input[offline_key(d)] for d in devices if user_input.get(offline_key(d)) in OFFLINE_LEVELS}
+            await hub.set_offline_alerts(user_input.get("default_offline", "off"), own_offline)
+            await hub.set_global_alerts(user_input.get("warning_delay", 0), user_input.get("error_delay", 0), default, own_kinds)
             return self.async_create_entry(title="", data={})
 
-        kinds = selector.SelectSelector(selector.SelectSelectorConfig(
-            options=[selector.SelectOptionDict(value=k, label=label) for k, label in ALERT_CATEGORIES],
-            multiple=True, mode=selector.SelectSelectorMode.LIST,
-        ))
-        seconds = selector.NumberSelector(selector.NumberSelectorConfig(
-            min=0, max=86400, step=1, unit_of_measurement="s", mode=selector.NumberSelectorMode.BOX,
-        ))
-        fields = {
-            vol.Required("warning_delay", default=current["warning_delay"]): seconds,
-            vol.Required("error_delay", default=current["error_delay"]): seconds,
-            vol.Optional("default", default=current["default"]): kinds,
-        }
-        for device_id in devices:
-            fields[vol.Optional(device_id, default=sorted(hub.alert_categories(device_id)))] = kinds
-        return self.async_show_form(step_id="global_alerts", data_schema=vol.Schema(fields))
-
-    async def async_step_offline_alerts(self, user_input=None):
-        hub = self._hub()
-        devices = sorted(hub.device_keys)
-        if user_input is not None:
-            own = {d: user_input[d] for d in devices if user_input.get(d) in OFFLINE_LEVELS}
-            await hub.set_offline_alerts(user_input.get("default", "off"), own)
-            return self.async_create_entry(title="", data={})
+        def kinds(compact):
+            return selector.SelectSelector(selector.SelectSelectorConfig(
+                options=[selector.SelectOptionDict(value=k, label=label) for k, label in ALERT_CATEGORIES],
+                multiple=True,
+                mode=selector.SelectSelectorMode.DROPDOWN if compact else selector.SelectSelectorMode.LIST,
+            ))
 
         def levels(with_default):
             options = [selector.SelectOptionDict(value="default", label="Use default")] if with_default else []
@@ -376,11 +360,19 @@ class TuxdOptionsFlow(config_entries.OptionsFlow):
                         for v, label in (("off", "Off"), ("warning", "Warning"), ("error", "Error"))]
             return selector.SelectSelector(selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN))
 
-        current = hub.offline_alerts
-        fields = {vol.Required("default", default=current.get("default", "off")): levels(False)}
+        seconds = selector.NumberSelector(selector.NumberSelectorConfig(
+            min=0, max=86400, step=1, unit_of_measurement="s", mode=selector.NumberSelectorMode.BOX,
+        ))
+        fields = {
+            vol.Required("warning_delay", default=alerts["warning_delay"]): seconds,
+            vol.Required("error_delay", default=alerts["error_delay"]): seconds,
+            vol.Required("default_offline", default=offline.get("default", "off")): levels(False),
+            vol.Optional("default_kinds", default=alerts["default"]): kinds(False),
+        }
         for device_id in devices:
-            fields[vol.Required(device_id, default=current.get("devices", {}).get(device_id, "default"))] = levels(True)
-        return self.async_show_form(step_id="offline_alerts", data_schema=vol.Schema(fields))
+            fields[vol.Required(offline_key(device_id), default=offline.get("devices", {}).get(device_id, "default"))] = levels(True)
+            fields[vol.Optional(kinds_key(device_id), default=sorted(hub.alert_categories(device_id)))] = kinds(True)
+        return self.async_show_form(step_id="alerts", data_schema=vol.Schema(fields))
 
     async def async_step_run_command_result(self, user_input=None, results=None):
         if results is not None:

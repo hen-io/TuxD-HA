@@ -109,7 +109,12 @@ def _clean_global_alerts(value, old_problem_delay=None):
             return 0
 
     def kinds(raw):
-        return [k for k in _CATEGORY_KEYS if k in raw] if isinstance(raw, (list, tuple, set)) else None
+        if not isinstance(raw, (list, tuple, set)):
+            return None
+        raw = set(raw)
+        if "thresholds" in raw:
+            raw |= {k for k in _CATEGORY_KEYS if k.startswith("threshold_")}
+        return [k for k in _CATEGORY_KEYS if k in raw]
 
     default = kinds(value.get("default"))
     devices = value.get("devices") if isinstance(value.get("devices"), dict) else {}
@@ -157,6 +162,7 @@ class TuxdHub:
         self.online_timeout = ONLINE_TIMEOUT_DEFAULT
         self.global_alerts = _clean_global_alerts(None)
         self._threshold_warning_since = {}
+        self._threshold_parts = {}
         self.offline_alerts = {"default": "off", "devices": {}}
         self._offline = {}
         self._started_at = time.time()
@@ -917,14 +923,17 @@ class TuxdHub:
         return self._threshold_warnings.get(device_id, "")
 
     def _refresh_threshold_warning(self, device_id):
-        parts = []
+        parts = {}
         for key, name, _icon, unit, _min, _max, _step, default in THRESHOLD_METRICS:
             value = self.metric_value(device_id, key)
             limit = self.thresholds.get(key, default)
             if value is not None and value > limit:
                 suffix = unit if unit == "%" else (f" {unit}" if unit else "")
-                parts.append(f"{name} {value:g}{suffix} > {limit:g}{suffix}")
-        text = "; ".join(parts)
+                parts[key] = f"{name} {value:g}{suffix} > {limit:g}{suffix}"
+        known = self._threshold_parts.get(device_id, {})
+        now = time.time()
+        self._threshold_parts[device_id] = {k: (t, known[k][1] if k in known else now) for k, t in parts.items()}
+        text = "; ".join(parts.values())
         if text == self._threshold_warnings.get(device_id, ""):
             return
         self._threshold_warnings[device_id] = text
@@ -947,6 +956,9 @@ class TuxdHub:
     def alert_categories(self, device_id):
         own = self.global_alerts["devices"].get(device_id)
         return set(own if own is not None else self.global_alerts["default"])
+
+    def threshold_parts(self, device_id):
+        return dict(self._threshold_parts.get(device_id, {}))
 
     def threshold_warning_since(self, device_id):
         return self._threshold_warning_since.get(device_id, 0.0)

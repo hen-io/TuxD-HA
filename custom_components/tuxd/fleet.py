@@ -92,7 +92,12 @@ class FleetProblemsMixin:
                     hit = True
                     own = reasons.get(device)
                     parts.append("" if own in _EMPTY else str(own))
-            if self.LEVEL == "warning" and self._counts(device, "thresholds"):
+            if self.LEVEL == "warning" and hasattr(self.hub, "threshold_parts"):
+                for metric, (text, since) in self.hub.threshold_parts(device).items():
+                    if self._counts(device, f"threshold_{metric}") and self._lasted(since):
+                        hit = True
+                        parts.append(text)
+            elif self.LEVEL == "warning":
                 over = _threshold(self.hub, device)
                 since = self.hub.threshold_warning_since(device) if hasattr(self.hub, "threshold_warning_since") else 0
                 if over and self._lasted(since):
